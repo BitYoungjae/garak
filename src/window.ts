@@ -1,0 +1,442 @@
+import GObject from 'gi://GObject';
+import GLib from 'gi://GLib';
+import Adw from 'gi://Adw';
+import Gtk from 'gi://Gtk';
+import Gdk from 'gi://Gdk';
+import GtkLayerShell from 'gi://Gtk4LayerShell';
+
+import { PlayerService } from './services/player.js';
+import { ConfigService } from './services/config.js';
+import { ThemeService } from './services/theme.js';
+import { AlbumArt } from './widgets/album-art.js';
+import { TrackInfo } from './widgets/track-info.js';
+import { Controls } from './widgets/controls.js';
+import { Progress } from './widgets/progress.js';
+
+export class PopupWindow extends Adw.ApplicationWindow {
+  static {
+    GObject.registerClass(this);
+  }
+
+  private static readonly TOP_MARGIN = 4;
+
+  private playerService: PlayerService;
+  private configService: ConfigService;
+  private themeService: ThemeService;
+  private albumArt!: AlbumArt;
+  private trackInfo!: TrackInfo;
+  private controls!: Controls;
+  private progress!: Progress;
+  private contentStack!: Gtk.Stack;
+  private emptyStateBox!: Gtk.Box;
+  private playerBox!: Gtk.Box;
+  private popupWidth: number = 360;
+
+  constructor(app: Adw.Application, configService: ConfigService, themeService: ThemeService) {
+    super({ application: app });
+
+    this.configService = configService;
+    this.themeService = themeService;
+    this.popupWidth = configService.popupWidth;
+
+    this.playerService = new PlayerService();
+
+    this.initLayerShell();
+    this.setupKeyController();
+    this.setupFocusHandler();
+    this.loadCSS();
+    this.buildUI();
+    this.connectPlayerService();
+    this.updateUI();
+  }
+
+  private initLayerShell(): void {
+    GtkLayerShell.init_for_window(this);
+    GtkLayerShell.set_layer(this, GtkLayerShell.Layer.TOP);
+    GtkLayerShell.set_keyboard_mode(this, GtkLayerShell.KeyboardMode.ON_DEMAND);
+
+    // Anchor to top and left for precise positioning
+    GtkLayerShell.set_anchor(this, GtkLayerShell.Edge.TOP, true);
+    GtkLayerShell.set_anchor(this, GtkLayerShell.Edge.LEFT, true);
+
+    // Get cursor position for horizontal centering
+    const cursorPos = this.getCursorPosition();
+    const monitorWidth = this.getMonitorWidth();
+
+    // Clamp to screen bounds (left and right)
+    const centered = cursorPos.x - this.popupWidth / 2;
+    const maxLeft = monitorWidth - this.popupWidth;
+    const leftMargin = Math.max(0, Math.min(centered, maxLeft));
+    const topMargin = PopupWindow.TOP_MARGIN;
+
+    GtkLayerShell.set_margin(this, GtkLayerShell.Edge.TOP, topMargin);
+    GtkLayerShell.set_margin(this, GtkLayerShell.Edge.LEFT, leftMargin);
+  }
+
+  private getCursorPosition(): { x: number } {
+    try {
+      const [ok, stdout] = GLib.spawn_command_line_sync('hyprctl cursorpos');
+      if (ok && stdout) {
+        const output = new TextDecoder().decode(stdout).trim();
+        const match = output.match(/(\d+),\s*(\d+)/);
+        if (match) {
+          return { x: parseInt(match[1], 10) };
+        }
+      }
+    } catch (e) {
+      console.log('Failed to get cursor position:', e);
+    }
+    // Fallback: get monitor width from hyprctl and center
+    return { x: this.getMonitorWidth() / 2 };
+  }
+
+  private getMonitorWidth(): number {
+    try {
+      const [ok, stdout] = GLib.spawn_command_line_sync('hyprctl monitors -j');
+      if (ok && stdout) {
+        const output = new TextDecoder().decode(stdout);
+        const monitors = JSON.parse(output);
+        for (const monitor of monitors) {
+          if (monitor.focused) {
+            return monitor.width / monitor.scale;
+          }
+        }
+        if (monitors.length > 0) {
+          return monitors[0].width / monitors[0].scale;
+        }
+      }
+    } catch (e) {
+      console.log('Failed to get monitor width:', e);
+    }
+    return 1920; // Last resort fallback
+  }
+
+  private setupKeyController(): void {
+    const keyController = new Gtk.EventControllerKey();
+    keyController.connect('key-pressed', (_controller, keyval) => {
+      if (keyval === Gdk.KEY_Escape) {
+        this.close();
+        return true;
+      }
+      return false;
+    });
+    this.add_controller(keyController);
+  }
+
+  private setupFocusHandler(): void {
+    // DEBUG_NO_AUTO_CLOSE=1 로 자동 닫힘 비활성화
+    if (GLib.getenv('DEBUG_NO_AUTO_CLOSE')) {
+      return;
+    }
+    this.connect('notify::is-active', () => {
+      if (!this.is_active) {
+        this.close();
+      }
+    });
+  }
+
+  private loadCSS(): void {
+    const colors = this.themeService.colors;
+    const borderRadius = this.themeService.borderRadius;
+    const albumArtSize = this.configService.albumArtSize;
+    const progressBarHeight = this.configService.progressBarHeight;
+    const playPauseButtonSize = this.configService.playPauseButtonSize;
+    const controlButtonSize = this.configService.controlButtonSize;
+    const paddingTop = this.configService.paddingTop;
+    const paddingBottom = this.configService.paddingBottom;
+    const paddingLeft = this.configService.paddingLeft;
+    const paddingRight = this.configService.paddingRight;
+    const baseFontSize = this.configService.baseFontSize;
+    const titleFontSize = this.configService.titleFontSize;
+    const artistFontSize = this.configService.artistFontSize;
+    const albumFontSize = this.configService.albumFontSize;
+    const timeFontSize = this.configService.timeFontSize;
+    const albumArtBorderRadius = this.configService.albumArtBorderRadius;
+
+    const css = `
+      window {
+        background: transparent;
+      }
+
+      .popup-container {
+        background-color: ${colors.background};
+        border: 1px solid ${colors.border};
+        border-radius: ${borderRadius}px;
+        padding-top: ${paddingTop}px;
+        padding-bottom: ${paddingBottom}px;
+        padding-left: ${paddingLeft}px;
+        padding-right: ${paddingRight}px;
+        font-size: ${baseFontSize}px;
+      }
+
+      .album-art-container {
+        min-width: ${albumArtSize}px;
+        min-height: ${albumArtSize}px;
+        border-radius: ${albumArtBorderRadius}px;
+      }
+
+      .album-art {
+        border-radius: ${albumArtBorderRadius}px;
+      }
+
+      .album-art-placeholder-box {
+        background-color: ${colors.progress.track};
+        border-radius: ${albumArtBorderRadius}px;
+      }
+
+      .album-art-placeholder {
+        opacity: 0.5;
+        color: ${colors.text.muted};
+      }
+
+      .track-title {
+        font-weight: bold;
+        font-size: ${titleFontSize}em;
+        color: ${colors.text.primary};
+      }
+
+      .track-artist {
+        font-size: ${artistFontSize}em;
+        color: ${colors.text.secondary};
+      }
+
+      .track-album {
+        color: ${colors.text.muted};
+        font-size: ${albumFontSize}em;
+      }
+
+      .controls {
+      }
+
+      .play-pause-button {
+        min-width: ${playPauseButtonSize}px;
+        min-height: ${playPauseButtonSize}px;
+        border-radius: 9999px;
+        padding: 0;
+        color: ${colors.button.normal};
+      }
+
+      .play-pause-button:hover {
+        color: ${colors.button.hover};
+      }
+
+      .play-pause-button:disabled {
+        color: ${colors.button.disabled};
+      }
+
+      .control-button {
+        min-width: ${controlButtonSize}px;
+        min-height: ${controlButtonSize}px;
+        border-radius: 9999px;
+        padding: 0;
+        color: ${colors.button.normal};
+      }
+
+      .control-button:hover {
+        color: ${colors.button.hover};
+      }
+
+      .control-button:disabled {
+        color: ${colors.button.disabled};
+      }
+
+      .progress-container {
+      }
+
+      .progress-scale trough {
+        min-height: ${progressBarHeight}px;
+        background-color: ${colors.progress.track};
+        border-radius: ${progressBarHeight / 2}px;
+      }
+
+      .progress-scale trough highlight {
+        background-color: ${colors.progress.fill};
+        border-radius: ${progressBarHeight / 2}px;
+      }
+
+      .progress-scale slider {
+        min-width: 16px;
+        min-height: 16px;
+        margin: -5px;
+        background-color: ${colors.progress.knob};
+        border-radius: 8px;
+      }
+
+      .time-label {
+        font-size: ${timeFontSize}em;
+        color: ${colors.text.muted};
+      }
+
+      .empty-state {
+        padding: 24px;
+      }
+
+      .empty-state-icon {
+        color: ${colors.text.muted};
+        opacity: 0.3;
+      }
+
+      .empty-state-label {
+        color: ${colors.text.secondary};
+        opacity: 0.6;
+        margin-top: 12px;
+      }
+    `;
+
+    const cssProvider = new Gtk.CssProvider();
+    cssProvider.load_from_string(css);
+    Gtk.StyleContext.add_provider_for_display(
+      Gdk.Display.get_default()!,
+      cssProvider,
+      Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+    );
+  }
+
+  private buildUI(): void {
+    const albumArtSize = this.configService.albumArtSize;
+    const sectionSpacing = this.configService.sectionSpacing;
+    const albumArtSpacing = this.configService.albumArtSpacing;
+    const controlButtonSpacing = this.configService.controlButtonSpacing;
+
+    const mainBox = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL,
+      spacing: sectionSpacing,
+      cssClasses: ['popup-container'],
+    });
+
+    // Initialize widgets with config values
+    this.albumArt = new AlbumArt(albumArtSize);
+    this.trackInfo = new TrackInfo();
+    this.controls = new Controls({
+      playPause: this.configService.playPauseButtonSize,
+      control: this.configService.controlButtonSize,
+      spacing: controlButtonSpacing,
+    });
+    this.progress = new Progress();
+
+    // Player content
+    this.playerBox = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL,
+      spacing: sectionSpacing,
+    });
+
+    // Top row: album art + track info
+    const topRow = new Gtk.Box({
+      orientation: Gtk.Orientation.HORIZONTAL,
+      spacing: albumArtSpacing,
+    });
+
+    topRow.append(this.albumArt);
+    topRow.append(this.trackInfo);
+
+    this.playerBox.append(topRow);
+    this.playerBox.append(this.progress);
+    this.playerBox.append(this.controls);
+
+    // Empty state
+    this.emptyStateBox = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL,
+      halign: Gtk.Align.CENTER,
+      valign: Gtk.Align.CENTER,
+      cssClasses: ['empty-state'],
+    });
+
+    const emptyIcon = new Gtk.Image({
+      iconName: 'audio-x-generic-symbolic',
+      pixelSize: 48,
+      cssClasses: ['empty-state-icon'],
+    });
+
+    const emptyLabel = new Gtk.Label({
+      label: '재생 중인 미디어 없음',
+      cssClasses: ['empty-state-label'],
+    });
+
+    this.emptyStateBox.append(emptyIcon);
+    this.emptyStateBox.append(emptyLabel);
+
+    // Stack
+    this.contentStack = new Gtk.Stack({
+      transitionType: Gtk.StackTransitionType.CROSSFADE,
+      transitionDuration: 200,
+    });
+
+    this.contentStack.add_named(this.playerBox, 'player');
+    this.contentStack.add_named(this.emptyStateBox, 'empty');
+
+    mainBox.append(this.contentStack);
+
+    this.set_content(mainBox);
+    this.set_default_size(this.popupWidth, -1);
+  }
+
+  private connectPlayerService(): void {
+    this.playerService.connect('metadata-changed', () => {
+      this.updateMetadata();
+    });
+
+    this.playerService.connect('state-changed', () => {
+      this.updateState();
+    });
+
+    this.playerService.connect('position-changed', () => {
+      this.updateProgress();
+    });
+
+    this.playerService.connect('player-vanished', () => {
+      this.updateUI();
+    });
+
+    this.controls.connect('play-pause', () => {
+      this.playerService.playPause();
+    });
+
+    this.controls.connect('next', () => {
+      this.playerService.next();
+    });
+
+    this.controls.connect('previous', () => {
+      this.playerService.previous();
+    });
+
+    // Connect progress seek to player setPosition
+    this.progress.connect('seek', (_widget, positionUs: number) => {
+      this.playerService.setPosition(positionUs);
+    });
+  }
+
+  private updateUI(): void {
+    if (this.playerService.hasPlayer) {
+      this.contentStack.set_visible_child_name('player');
+      this.updateMetadata();
+      this.updateState();
+      this.updateProgress();
+    } else {
+      this.contentStack.set_visible_child_name('empty');
+    }
+  }
+
+  private updateMetadata(): void {
+    const meta = this.playerService.metadata;
+    this.albumArt.setArtUrl(meta.artUrl);
+    this.trackInfo.setTrackInfo(meta.title, meta.artist, meta.album);
+  }
+
+  private updateState(): void {
+    const state = this.playerService.state;
+    this.controls.setPlaying(state.status === 'playing');
+    this.controls.setCanGoNext(state.canGoNext);
+    this.controls.setCanGoPrevious(state.canGoPrevious);
+  }
+
+  private updateProgress(): void {
+    const state = this.playerService.state;
+    const meta = this.playerService.metadata;
+    this.progress.setProgress(state.position, meta.length);
+  }
+
+  override vfunc_close_request(): boolean {
+    this.playerService.destroy();
+    return super.vfunc_close_request();
+  }
+}

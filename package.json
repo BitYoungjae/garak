@@ -1,0 +1,54 @@
+{
+  "name": "garak",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "GTK4 MPRIS popup widget for Waybar",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "start": "npm run build && gjs -m dist/main.js",
+    "start:debug": "npm run build && GJS_DEBUG_OUTPUT=stderr GJS_DEBUG_TOPICS='JS ERROR;JS LOG' gjs -m dist/main.js",
+    "check": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "keywords": [
+    "waybar",
+    "mpris",
+    "gtk4",
+    "gjs"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "esbuild": "^0.27.2",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^9.1.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2",
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.54.0"
+  },
+  "dependencies": {
+    "@girs/adw-1": "^1.9.0-4.0.0-beta.38",
+    "@girs/gio-2.0": "^2.86.0-4.0.0-beta.38",
+    "@girs/gjs": "^4.0.0-beta.38",
+    "@girs/glib-2.0": "^2.86.0-4.0.0-beta.38",
+    "@girs/gtk-4.0": "^4.20.1-4.0.0-beta.38",
+    "@girs/gtk4layershell-1.0": "^1.0.0-4.0.0-beta.38",
+    "@girs/playerctl-2.0": "^2.0.0-4.0.0-beta.38"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  }
+}
