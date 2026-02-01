@@ -134,8 +134,8 @@ Add to your Waybar config:
 "modules-right": ["custom/mpris"],
 
 "custom/mpris": {
-  "exec": "/usr/bin/mpris-popup",
-  "on-click": "/usr/bin/mpris-popup"
+  "exec": "/usr/bin/garak",
+  "on-click": "/usr/bin/garak"
 }
 ```
 

@@ -129,8 +129,8 @@ Waybar 설정 파일에 아래 내용을 추가하면 됩니다.
 "modules-right": ["custom/mpris"],
 
 "custom/mpris": {
-  "exec": "/usr/bin/mpris-popup",
-  "on-click": "/usr/bin/mpris-popup"
+  "exec": "/usr/bin/garak",
+  "on-click": "/usr/bin/garak"
 }
 ```
 
