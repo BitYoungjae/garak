@@ -2,19 +2,16 @@
 
 A GTK4-based MPRIS popup widget for Waybar on Wayland/Linux. The name **Garak** (가락) comes from the Korean word for "melody" or "tune" (as in 한 가락 — one song).
 
-![Garak Preview](https://img.shields.io/badge/GTK4-4.0-blue)
+[![한국어](https://img.shields.io/badge/lang-한국어-blue)](README.ko.md)
+![GTK4](https://img.shields.io/badge/GTK4-4.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Features
 
-- **Elegant Media Controls** - Display current track info with album art, title, artist, and album
-- **Playback Controls** - Previous, play/pause, next buttons with state-sensitive icons
-- **Seekable Progress Bar** - Click anywhere on the progress bar to seek
-- **Auto-detection** - Automatically connects to any MPRIS-compliant media player
-- **Wayland Native** - Uses layer-shell for proper Wayland integration
-- **Smart Positioning** - Cursor-based positioning on Hyprland, center-aligned on other compositors
-- **Toggle Behavior** - Click to open, click outside or press Escape to close
-- **Customizable** - Configurable dimensions, spacing, fonts, and colors
+- Album art, track info display and playback controls
+- Auto-detection of MPRIS players
+- Native Wayland layer-shell support
+- Customizable size, colors, and fonts
 
 ## Preview
 
