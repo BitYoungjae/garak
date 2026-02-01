@@ -1,4 +1,4 @@
-# Maintainer: Your Name <your@email.com>
+# Maintainer: BitYoungjae <bityoungjae@github.com>
 pkgname=garak
 pkgver=1.0.0
 pkgrel=1
@@ -9,7 +9,7 @@ license=('MIT')
 depends=('gjs' 'gtk4' 'gtk4-layer-shell' 'playerctl')
 makedepends=('nodejs')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')  # Replace with actual checksum after release
+sha256sums=('a0810e54117ce67c9b9eeb558ca45daaa49f154ca2d1c2b59b71ae55e114c5c4')
 
 build() {
   cd "$pkgname-$pkgver"
