@@ -138,7 +138,27 @@ AUR requires a repository containing ONLY PKGBUILD and .SRCINFO. Use the `aur-pk
 git branch --list aur-pkg
 ```
 
-#### If aur-pkg branch does NOT exist (first-time setup):
+#### If aur-pkg branch does NOT exist locally:
+
+First, check if AUR remote already has a master branch (existing package):
+
+```bash
+git ls-remote aur refs/heads/master
+```
+
+**If AUR has master (existing package, e.g., cloned on new machine):**
+
+```bash
+# Fetch AUR master to local aur-pkg branch
+git fetch aur master:aur-pkg
+git checkout aur-pkg
+git checkout master -- PKGBUILD .SRCINFO
+git commit -m "Update to vX.Y.Z"
+git push aur aur-pkg:master
+git checkout master
+```
+
+**If AUR has no master (first-time AUR registration):**
 
 ```bash
 # Create orphan branch with only packaging files
@@ -187,6 +207,7 @@ AUR: https://aur.archlinux.org/packages/garak
 | Push fails                | Show error, suggest manual resolution                                        |
 | AUR remote not configured | Ask user to add it or skip AUR push                                          |
 | AUR push fails            | Show SSH key setup instructions if auth error                                |
+| AUR non-fast-forward      | Fetch AUR master first, then update (existing package on new machine)        |
 | Checkout to master fails  | Use `git checkout master -f` to force switch                                 |
 
 ## AUR Architecture
