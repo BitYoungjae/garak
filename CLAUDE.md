@@ -34,6 +34,17 @@
 - Until a convention is defined, use short, imperative subjects (e.g., “Add Waybar toggle option”).
 - PRs should include: a concise summary, steps to test (commands run), and screenshots or gifs for UI changes.
 
+## Version Bumping
+
+Update version in these files:
+
+- `package.json` — main version source
+- `PKGBUILD` — `pkgver=X.Y.Z`
+- `.SRCINFO` — `pkgver` and `source` URL
+- `package-lock.json` — run `npm install --package-lock-only`
+
+Note: After release, regenerate `sha256sums` in PKGBUILD with `makepkg -g`.
+
 ## Configuration & Runtime Notes
 
 - Runtime dependencies include `gjs`, `gtk4`, `libadwaita`, `gtk4-layer-shell`, and `playerctl` (see `README.md`).
