@@ -56,19 +56,17 @@ Update version in these files:
 /gitkkal:pr
 # Review and merge on GitHub
 
-# 5. Tag on master after merge
+# 5. Tag and update checksum (after merge)
 git checkout master && git pull
-git tag vX.Y.Z && git push origin --tags
-
-# 6. Update checksum (after tag push)
-makepkg -g  # Copy output to PKGBUILD sha256sums
-makepkg --printsrcinfo > .SRCINFO
-
-# 7. Commit checksum
-/gitkkal:commit update sha256sums
+/release vX.Y.Z
 ```
 
-Note: Checksum can only be calculated after tag push (requires GitHub tarball).
+The `/release` skill automatically:
+
+- Creates and pushes an annotated tag
+- Updates PKGBUILD checksums via `updpkgsums`
+- Regenerates `.SRCINFO`
+- Commits and pushes the checksum update
 
 ## Runtime Dependencies
 
