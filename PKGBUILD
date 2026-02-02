@@ -1,6 +1,6 @@
 # Maintainer: BitYoungjae <bityoungjae@github.com>
 pkgname=garak
-pkgver=1.1.1
+pkgver=1.2.0
 pkgrel=1
 pkgdesc="GTK4 MPRIS popup widget for Waybar"
 arch=('x86_64' 'aarch64')
