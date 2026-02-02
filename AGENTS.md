@@ -4,7 +4,7 @@
 
 - `src/` holds the TypeScript source. Entry point is `src/main.ts`, with UI and services split into `src/window.ts`, `src/services/`, and `src/widgets/`.
 - `dist/` is the build output used by GJS at runtime.
-- `bin/` contains the `mpris-popup` launcher script for Waybar integration.
+- `bin/` contains the `garak` launcher script for Waybar integration.
 - `config.example.json` is the template for user configuration at `~/.config/garak/config.json`.
 
 ## Build, Test, and Development Commands

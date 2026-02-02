@@ -150,7 +150,7 @@ npm run start:debug  # 디버그 모드로 실행
 │   ├── window.ts         # 메인 팝업 창
 │   ├── services/         # 플레이어, 설정, 테마 관련
 │   └── widgets/          # UI 컴포넌트들
-├── bin/mpris-popup       # Waybar용 실행 스크립트
+├── bin/garak             # Waybar용 실행 스크립트
 └── config.example.json   # 설정 파일 예시
 ```
 

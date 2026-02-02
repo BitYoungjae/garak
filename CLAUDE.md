@@ -1,40 +1,73 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+## Project Structure
 
-- `src/` holds the TypeScript source. Entry point is `src/main.ts`, with UI and services split into `src/window.ts`, `src/services/`, and `src/widgets/`.
-- `dist/` is the build output used by GJS at runtime.
-- `bin/` contains the `mpris-popup` launcher script for Waybar integration.
-- `config.example.json` is the template for user configuration at `~/.config/garak/config.json`.
+- `src/` — TypeScript source. Entry point is `src/main.ts`.
+  - `src/window.ts` — Main window UI
+  - `src/services/` — Business logic (theme, player, config)
+  - `src/widgets/` — Reusable UI components
+- `dist/` — Build output used by GJS at runtime.
+- `bin/garak` — Launcher script for Waybar integration.
+- `config.example.json` — Template for user config at `~/.config/garak/config.json`.
 
-## Build, Test, and Development Commands
+## Commands
 
-- `npm install` installs Node dev dependencies (esbuild, TypeScript).
-- `npm run build` bundles TypeScript to `dist/` using `esbuild.config.js`.
-- `npm start` builds, then runs `gjs -m dist/main.js`.
-- `npm run start:debug` builds, then runs GJS with verbose JS error logging.
-- `npm run check` runs `tsc --noEmit` for type checking.
+| Command               | Description                              |
+| --------------------- | ---------------------------------------- |
+| `npm install`         | Install dev dependencies                 |
+| `npm run build`       | Bundle TypeScript to `dist/`             |
+| `npm start`           | Build and run with GJS                   |
+| `npm run start:debug` | Build and run with verbose error logging |
+| `npm run check`       | Type check with `tsc --noEmit`           |
 
-## Coding Style & Naming Conventions
+## Coding Style
 
-- TypeScript is compiled with `strict` and `noImplicitAny` enabled in `tsconfig.json`.
-- Use ES module syntax (`import`/`export`), consistent with `"type": "module"` in `package.json`.
-- Keep filenames kebab-case in `src/widgets/` and `src/services/` (e.g., `track-info.ts`).
-- Indentation follows existing code style (2 spaces). If you introduce new patterns, keep them consistent within the edited file.
+- TypeScript with `strict` and `noImplicitAny` enabled.
+- ES module syntax (`import`/`export`).
+- Filenames: kebab-case (e.g., `track-info.ts`).
+- Indentation: 2 spaces.
 
-## Testing Guidelines
+## Commit Guidelines
 
-- There is no automated test framework configured yet.
-- Use `npm run check` as the minimum verification step for type safety.
-- If you add tests in the future, document how to run them and their naming conventions here.
+- Use short, imperative subjects (e.g., "Add Waybar toggle option").
+- Use HEREDOC for multi-line commit messages.
 
-## Commit & Pull Request Guidelines
+## Version Bumping & Release
 
-- This repository currently has no Git commit history, so no established commit message convention exists.
-- Until a convention is defined, use short, imperative subjects (e.g., “Add Waybar toggle option”).
-- PRs should include: a concise summary, steps to test (commands run), and screenshots or gifs for UI changes.
+Update version in these files:
 
-## Configuration & Runtime Notes
+- `package.json` — Main version source
+- `PKGBUILD` — `pkgver=X.Y.Z`
+- `.SRCINFO` — `pkgver` and `source` URL
+- `package-lock.json` — Run `npm install --package-lock-only`
 
-- Runtime dependencies include `gjs`, `gtk4`, `libadwaita`, `gtk4-layer-shell`, and `playerctl` (see `README.md`).
-- Example config lives in `config.example.json`; document any new config keys there.
+### Release Workflow (with gitkkal)
+
+```
+# 1. Create release branch
+/gitkkal:branch release vX.Y.Z
+
+# 2. Update version files (package.json, PKGBUILD, .SRCINFO, package-lock.json)
+
+# 3. Commit version bump
+/gitkkal:commit version bump
+
+# 4. Create PR and merge
+/gitkkal:pr
+# Review and merge on GitHub
+
+# 5. Tag and update checksum (after merge)
+git checkout master && git pull
+/release vX.Y.Z
+```
+
+The `/release` skill automatically:
+
+- Creates and pushes an annotated tag
+- Updates PKGBUILD checksums via `updpkgsums`
+- Regenerates `.SRCINFO`
+- Commits and pushes the checksum update
+
+## Runtime Dependencies
+
+`gjs`, `gtk4`, `libadwaita`, `gtk4-layer-shell`, `playerctl`

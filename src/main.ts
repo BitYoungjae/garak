@@ -32,10 +32,9 @@ class MprisPopupApplication extends Adw.Application {
 
   override vfunc_startup(): void {
     super.vfunc_startup();
-    // Load config synchronously to ensure it's ready before window creation
+    // Load config and theme synchronously to ensure they're ready before window creation
     this.configService.loadSync();
-    // Theme loading is async, but it has its own defaults
-    this.themeService.load().catch(() => {});
+    this.themeService.loadSync();
   }
 
   override vfunc_activate(): void {

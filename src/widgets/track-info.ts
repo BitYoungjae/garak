@@ -23,6 +23,9 @@ export class TrackInfo extends Gtk.Box {
     this.titleLabel = new Gtk.Label({
       label: '',
       xalign: 0,
+      wrap: true,
+      wrapMode: Pango.WrapMode.WORD_CHAR,
+      lines: 2,
       ellipsize: Pango.EllipsizeMode.END,
       maxWidthChars: 30,
       cssClasses: ['track-title'],

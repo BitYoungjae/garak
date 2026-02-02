@@ -78,6 +78,27 @@ export class ThemeService {
     return this.theme.fontFamily ?? DEFAULT_THEME.fontFamily!;
   }
 
+  loadSync(): void {
+    const configDir = GLib.get_user_config_dir();
+    const themePath = GLib.build_filenamev([configDir, 'garak', 'theme.json']);
+    const file = Gio.File.new_for_path(themePath);
+
+    try {
+      const [success, contents] = file.load_contents(null);
+      if (success) {
+        const decoder = new TextDecoder('utf-8');
+        const json = decoder.decode(contents);
+        const parsed = JSON.parse(json);
+        this.theme = this.mergeTheme(parsed);
+      }
+    } catch (e) {
+      if (e instanceof Error && !e.message.includes('No such file')) {
+        console.warn('Theme load error, using defaults:', e);
+      }
+      this.theme = deepClone(DEFAULT_THEME);
+    }
+  }
+
   async load(): Promise<void> {
     const configDir = GLib.get_user_config_dir();
     const themePath = GLib.build_filenamev([configDir, 'garak', 'theme.json']);
@@ -137,7 +158,8 @@ export class ThemeService {
         },
       },
       borderRadius: parsed.borderRadius ?? DEFAULT_THEME.borderRadius,
-      fontFamily: parsed.fontFamily ?? DEFAULT_THEME.fontFamily,
+      fontFamily:
+        typeof parsed.fontFamily === 'string' ? parsed.fontFamily : DEFAULT_THEME.fontFamily,
     };
   }
 }
