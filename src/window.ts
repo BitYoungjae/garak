@@ -52,6 +52,7 @@ export class PopupWindow extends Adw.ApplicationWindow {
 
   private initLayerShell(): void {
     GtkLayerShell.init_for_window(this);
+    GtkLayerShell.set_namespace(this, 'garak');
     GtkLayerShell.set_layer(this, GtkLayerShell.Layer.TOP);
     GtkLayerShell.set_keyboard_mode(this, GtkLayerShell.KeyboardMode.ON_DEMAND);
 
