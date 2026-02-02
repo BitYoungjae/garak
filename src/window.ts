@@ -138,6 +138,7 @@ export class PopupWindow extends Adw.ApplicationWindow {
   private loadCSS(): void {
     const colors = this.themeService.colors;
     const borderRadius = this.themeService.borderRadius;
+    const fontFamily = this.themeService.fontFamily;
     const albumArtSize = this.configService.albumArtSize;
     const progressBarHeight = this.configService.progressBarHeight;
     const playPauseButtonSize = this.configService.playPauseButtonSize;
@@ -166,6 +167,7 @@ export class PopupWindow extends Adw.ApplicationWindow {
         padding-bottom: ${paddingBottom}px;
         padding-left: ${paddingLeft}px;
         padding-right: ${paddingRight}px;
+        font-family: ${fontFamily};
         font-size: ${baseFontSize}px;
       }
 

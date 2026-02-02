@@ -160,7 +160,7 @@ npm run start:debug
 │   ├── window.ts         # Main popup window
 │   ├── services/         # Player, config, theme services
 │   └── widgets/          # UI components
-├── bin/mpris-popup       # Waybar launcher script
+├── bin/garak             # Waybar launcher script
 └── config.example.json   # Configuration template
 ```
 
