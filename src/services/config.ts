@@ -1,5 +1,4 @@
-import GLib from 'gi://GLib';
-import Gio from 'gi://Gio';
+import { buildGarakConfigPath, isJsonObject, loadJsonFileSync, readNumber } from './json-file.js';
 
 const DEFAULT_PADDING = 20;
 const DEFAULT_SECTION_SPACING = 12;
@@ -11,6 +10,14 @@ const DEFAULT_ARTIST_FONT_SIZE = 1.0;
 const DEFAULT_ALBUM_FONT_SIZE = 0.9;
 const DEFAULT_TIME_FONT_SIZE = 0.85;
 const DEFAULT_ALBUM_ART_BORDER_RADIUS = 8;
+const CONFIG_FILE_NAME = 'config.json';
+
+const POPUP_WIDTH_MIN = 260;
+const POPUP_WIDTH_MAX = 1600;
+const PIXEL_VALUE_MIN = 0;
+const PIXEL_VALUE_MAX = 400;
+const FONT_SCALE_MIN = 0.5;
+const FONT_SCALE_MAX = 3;
 
 export interface Config {
   popupWidth?: number;
@@ -32,9 +39,11 @@ export interface Config {
   albumFontSize?: number;
   timeFontSize?: number;
   albumArtBorderRadius?: number;
+  cursorOffsetX?: number;
+  cursorOffsetY?: number;
 }
 
-const DEFAULT_CONFIG: Config = {
+const DEFAULT_CONFIG: Required<Config> = {
   popupWidth: 420,
   albumArtSize: 100,
   progressBarHeight: 6,
@@ -54,134 +63,122 @@ const DEFAULT_CONFIG: Config = {
   albumFontSize: DEFAULT_ALBUM_FONT_SIZE,
   timeFontSize: DEFAULT_TIME_FONT_SIZE,
   albumArtBorderRadius: DEFAULT_ALBUM_ART_BORDER_RADIUS,
+  cursorOffsetX: 0,
+  cursorOffsetY: -4,
 };
 
 export class ConfigService {
-  private config: Config = { ...DEFAULT_CONFIG };
+  private _config: Readonly<Required<Config>> = DEFAULT_CONFIG;
 
-  get popupWidth(): number {
-    return this.config.popupWidth ?? DEFAULT_CONFIG.popupWidth!;
-  }
-
-  get albumArtSize(): number {
-    return this.config.albumArtSize ?? DEFAULT_CONFIG.albumArtSize!;
-  }
-
-  get progressBarHeight(): number {
-    return this.config.progressBarHeight ?? DEFAULT_CONFIG.progressBarHeight!;
-  }
-
-  get playPauseButtonSize(): number {
-    return this.config.playPauseButtonSize ?? DEFAULT_CONFIG.playPauseButtonSize!;
-  }
-
-  get controlButtonSize(): number {
-    return this.config.controlButtonSize ?? DEFAULT_CONFIG.controlButtonSize!;
-  }
-
-  get paddingTop(): number {
-    return this.config.paddingTop ?? this.config.padding ?? DEFAULT_PADDING;
-  }
-
-  get paddingBottom(): number {
-    return this.config.paddingBottom ?? this.config.padding ?? DEFAULT_PADDING;
-  }
-
-  get paddingLeft(): number {
-    return this.config.paddingLeft ?? this.config.padding ?? DEFAULT_PADDING;
-  }
-
-  get paddingRight(): number {
-    return this.config.paddingRight ?? this.config.padding ?? DEFAULT_PADDING;
-  }
-
-  get sectionSpacing(): number {
-    return this.config.sectionSpacing ?? DEFAULT_SECTION_SPACING;
-  }
-
-  get albumArtSpacing(): number {
-    return this.config.albumArtSpacing ?? DEFAULT_ALBUM_ART_SPACING;
-  }
-
-  get controlButtonSpacing(): number {
-    return this.config.controlButtonSpacing ?? DEFAULT_CONTROL_BUTTON_SPACING;
-  }
-
-  get baseFontSize(): number {
-    return this.config.baseFontSize ?? DEFAULT_BASE_FONT_SIZE;
-  }
-
-  get titleFontSize(): number {
-    return this.config.titleFontSize ?? DEFAULT_TITLE_FONT_SIZE;
-  }
-
-  get artistFontSize(): number {
-    return this.config.artistFontSize ?? DEFAULT_ARTIST_FONT_SIZE;
-  }
-
-  get albumFontSize(): number {
-    return this.config.albumFontSize ?? DEFAULT_ALBUM_FONT_SIZE;
-  }
-
-  get timeFontSize(): number {
-    return this.config.timeFontSize ?? DEFAULT_TIME_FONT_SIZE;
-  }
-
-  get albumArtBorderRadius(): number {
-    return this.config.albumArtBorderRadius ?? DEFAULT_ALBUM_ART_BORDER_RADIUS;
+  get config(): Readonly<Required<Config>> {
+    return this._config;
   }
 
   loadSync(): void {
-    const configDir = GLib.get_user_config_dir();
-    const configPath = GLib.build_filenamev([configDir, 'garak', 'config.json']);
-    const file = Gio.File.new_for_path(configPath);
-
+    const configPath = buildGarakConfigPath(CONFIG_FILE_NAME);
     try {
-      const [success, contents] = file.load_contents(null);
-      if (success) {
-        const decoder = new TextDecoder('utf-8');
-        const json = decoder.decode(contents);
-        const parsed = JSON.parse(json);
-        this.config = { ...DEFAULT_CONFIG, ...parsed };
-      }
-    } catch (e) {
-      if (e instanceof Error && !e.message.includes('No such file')) {
-        console.warn('Config load error, using defaults:', e);
-      }
-      this.config = { ...DEFAULT_CONFIG };
+      const parsed = loadJsonFileSync(configPath);
+      this._config = this.normalizeConfig(parsed);
+    } catch (error) {
+      console.warn(`Config load error at ${configPath}, using defaults:`, error);
+      this._config = { ...DEFAULT_CONFIG };
     }
   }
 
-  async load(): Promise<void> {
-    const configDir = GLib.get_user_config_dir();
-    const configPath = GLib.build_filenamev([configDir, 'garak', 'config.json']);
-    const file = Gio.File.new_for_path(configPath);
-
-    try {
-      const [contents] = await new Promise<[Uint8Array, string | null]>((resolve, reject) => {
-        file.load_contents_async(null, (source, result) => {
-          try {
-            const [success, contents, etag] = (source as Gio.File).load_contents_finish(result);
-            if (success) {
-              resolve([contents, etag]);
-            } else {
-              reject(new Error('Failed to load config file'));
-            }
-          } catch (e) {
-            reject(e);
-          }
-        });
-      });
-
-      const decoder = new TextDecoder('utf-8');
-      const json = decoder.decode(contents);
-      const parsed = JSON.parse(json);
-      this.config = { ...DEFAULT_CONFIG, ...parsed };
-    } catch (e) {
-      if (e instanceof Error && !e.message.includes('No such file')) {
-        console.warn('Config load error, using defaults:', e);
-      }
-      this.config = { ...DEFAULT_CONFIG };
+  private normalizeConfig(input: unknown): Required<Config> {
+    if (!isJsonObject(input)) {
+      return { ...DEFAULT_CONFIG };
     }
+
+    const sharedPadding = readNumber(input.padding, DEFAULT_CONFIG.padding, PIXEL_VALUE_MIN, 200);
+
+    return {
+      popupWidth: readNumber(
+        input.popupWidth,
+        DEFAULT_CONFIG.popupWidth,
+        POPUP_WIDTH_MIN,
+        POPUP_WIDTH_MAX
+      ),
+      albumArtSize: readNumber(
+        input.albumArtSize,
+        DEFAULT_CONFIG.albumArtSize,
+        48,
+        PIXEL_VALUE_MAX
+      ),
+      progressBarHeight: readNumber(
+        input.progressBarHeight,
+        DEFAULT_CONFIG.progressBarHeight,
+        2,
+        32
+      ),
+      playPauseButtonSize: readNumber(
+        input.playPauseButtonSize,
+        DEFAULT_CONFIG.playPauseButtonSize,
+        24,
+        PIXEL_VALUE_MAX
+      ),
+      controlButtonSize: readNumber(
+        input.controlButtonSize,
+        DEFAULT_CONFIG.controlButtonSize,
+        20,
+        PIXEL_VALUE_MAX
+      ),
+      padding: sharedPadding,
+      paddingTop: readNumber(input.paddingTop, sharedPadding, PIXEL_VALUE_MIN, 200),
+      paddingBottom: readNumber(input.paddingBottom, sharedPadding, PIXEL_VALUE_MIN, 200),
+      paddingLeft: readNumber(input.paddingLeft, sharedPadding, PIXEL_VALUE_MIN, 200),
+      paddingRight: readNumber(input.paddingRight, sharedPadding, PIXEL_VALUE_MIN, 200),
+      sectionSpacing: readNumber(
+        input.sectionSpacing,
+        DEFAULT_CONFIG.sectionSpacing,
+        PIXEL_VALUE_MIN,
+        80
+      ),
+      albumArtSpacing: readNumber(
+        input.albumArtSpacing,
+        DEFAULT_CONFIG.albumArtSpacing,
+        PIXEL_VALUE_MIN,
+        120
+      ),
+      controlButtonSpacing: readNumber(
+        input.controlButtonSpacing,
+        DEFAULT_CONFIG.controlButtonSpacing,
+        PIXEL_VALUE_MIN,
+        80
+      ),
+      baseFontSize: readNumber(input.baseFontSize, DEFAULT_CONFIG.baseFontSize, 8, 72),
+      titleFontSize: readNumber(
+        input.titleFontSize,
+        DEFAULT_CONFIG.titleFontSize,
+        FONT_SCALE_MIN,
+        FONT_SCALE_MAX
+      ),
+      artistFontSize: readNumber(
+        input.artistFontSize,
+        DEFAULT_CONFIG.artistFontSize,
+        FONT_SCALE_MIN,
+        FONT_SCALE_MAX
+      ),
+      albumFontSize: readNumber(
+        input.albumFontSize,
+        DEFAULT_CONFIG.albumFontSize,
+        FONT_SCALE_MIN,
+        FONT_SCALE_MAX
+      ),
+      timeFontSize: readNumber(
+        input.timeFontSize,
+        DEFAULT_CONFIG.timeFontSize,
+        FONT_SCALE_MIN,
+        FONT_SCALE_MAX
+      ),
+      albumArtBorderRadius: readNumber(
+        input.albumArtBorderRadius,
+        DEFAULT_CONFIG.albumArtBorderRadius,
+        PIXEL_VALUE_MIN,
+        100
+      ),
+      cursorOffsetX: readNumber(input.cursorOffsetX, DEFAULT_CONFIG.cursorOffsetX, -200, 200),
+      cursorOffsetY: readNumber(input.cursorOffsetY, DEFAULT_CONFIG.cursorOffsetY, -200, 200),
+    };
   }
 }

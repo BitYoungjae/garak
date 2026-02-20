@@ -1,5 +1,4 @@
-import GLib from 'gi://GLib';
-import Gio from 'gi://Gio';
+import { buildGarakConfigPath, isJsonObject, loadJsonFileSync, readNumber } from './json-file.js';
 
 export interface ThemeColors {
   background: string;
@@ -8,10 +7,6 @@ export interface ThemeColors {
     primary: string;
     secondary: string;
     muted: string;
-  };
-  accent: {
-    playing: string;
-    paused: string;
   };
   progress: {
     track: string;
@@ -31,7 +26,16 @@ export interface Theme {
   fontFamily?: string;
 }
 
-const DEFAULT_THEME: Theme = {
+type ResolvedTheme = Theme & {
+  borderRadius: number;
+  fontFamily: string;
+};
+
+const THEME_FILE_NAME = 'theme.json';
+const BORDER_RADIUS_MIN = 0;
+const BORDER_RADIUS_MAX = 100;
+
+const DEFAULT_THEME: Readonly<ResolvedTheme> = {
   colors: {
     background: 'rgba(9, 9, 11, 0.95)',
     border: '#71717A',
@@ -39,10 +43,6 @@ const DEFAULT_THEME: Theme = {
       primary: '#E4E4E7',
       secondary: '#A1A1AA',
       muted: '#71717A',
-    },
-    accent: {
-      playing: '#81C784',
-      paused: '#52525B',
     },
     progress: {
       track: '#27272A',
@@ -59,107 +59,87 @@ const DEFAULT_THEME: Theme = {
   fontFamily: 'Pretendard, sans-serif',
 };
 
-function deepClone<T>(obj: T): T {
-  return JSON.parse(JSON.stringify(obj));
+function createDefaultTheme(): ResolvedTheme {
+  return {
+    ...DEFAULT_THEME,
+    colors: {
+      ...DEFAULT_THEME.colors,
+      text: { ...DEFAULT_THEME.colors.text },
+      progress: { ...DEFAULT_THEME.colors.progress },
+      button: { ...DEFAULT_THEME.colors.button },
+    },
+  };
+}
+
+function readString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value : fallback;
 }
 
 export class ThemeService {
-  private theme: Theme = deepClone(DEFAULT_THEME);
+  private theme: ResolvedTheme = createDefaultTheme();
 
   get colors(): ThemeColors {
     return this.theme.colors;
   }
 
   get borderRadius(): number {
-    return this.theme.borderRadius ?? DEFAULT_THEME.borderRadius!;
+    return this.theme.borderRadius;
   }
 
   get fontFamily(): string {
-    return this.theme.fontFamily ?? DEFAULT_THEME.fontFamily!;
+    return this.theme.fontFamily;
   }
 
   loadSync(): void {
-    const configDir = GLib.get_user_config_dir();
-    const themePath = GLib.build_filenamev([configDir, 'garak', 'theme.json']);
-    const file = Gio.File.new_for_path(themePath);
-
+    const themePath = buildGarakConfigPath(THEME_FILE_NAME);
     try {
-      const [success, contents] = file.load_contents(null);
-      if (success) {
-        const decoder = new TextDecoder('utf-8');
-        const json = decoder.decode(contents);
-        const parsed = JSON.parse(json);
-        this.theme = this.mergeTheme(parsed);
-      }
-    } catch (e) {
-      if (e instanceof Error && !e.message.includes('No such file')) {
-        console.warn('Theme load error, using defaults:', e);
-      }
-      this.theme = deepClone(DEFAULT_THEME);
-    }
-  }
-
-  async load(): Promise<void> {
-    const configDir = GLib.get_user_config_dir();
-    const themePath = GLib.build_filenamev([configDir, 'garak', 'theme.json']);
-    const file = Gio.File.new_for_path(themePath);
-
-    try {
-      const [contents] = await new Promise<[Uint8Array, string | null]>((resolve, reject) => {
-        file.load_contents_async(null, (source, result) => {
-          try {
-            const [success, contents, etag] = (source as Gio.File).load_contents_finish(result);
-            if (success) {
-              resolve([contents, etag]);
-            } else {
-              reject(new Error('Failed to load theme file'));
-            }
-          } catch (e) {
-            reject(e);
-          }
-        });
-      });
-
-      const decoder = new TextDecoder('utf-8');
-      const json = decoder.decode(contents);
-      const parsed = JSON.parse(json);
+      const parsed = loadJsonFileSync(themePath);
       this.theme = this.mergeTheme(parsed);
-    } catch (e) {
-      if (e instanceof Error && !e.message.includes('No such file')) {
-        console.warn('Theme load error, using defaults:', e);
-      }
-      this.theme = deepClone(DEFAULT_THEME);
+    } catch (error) {
+      console.warn(`Theme load error at ${themePath}, using defaults:`, error);
+      this.theme = createDefaultTheme();
     }
   }
 
-  private mergeTheme(parsed: Partial<Theme>): Theme {
+  private mergeTheme(input: unknown): ResolvedTheme {
+    if (!isJsonObject(input)) {
+      return createDefaultTheme();
+    }
+
+    const colors = isJsonObject(input.colors) ? input.colors : {};
+    const text = isJsonObject(colors.text) ? colors.text : {};
+    const progress = isJsonObject(colors.progress) ? colors.progress : {};
+    const button = isJsonObject(colors.button) ? colors.button : {};
+    const defaultBorderRadius = DEFAULT_THEME.borderRadius;
+    const defaultFontFamily = DEFAULT_THEME.fontFamily;
+
     return {
       colors: {
-        background: parsed.colors?.background ?? DEFAULT_THEME.colors.background,
-        border: parsed.colors?.border ?? DEFAULT_THEME.colors.border,
+        background: readString(colors.background, DEFAULT_THEME.colors.background),
+        border: readString(colors.border, DEFAULT_THEME.colors.border),
         text: {
-          primary: parsed.colors?.text?.primary ?? DEFAULT_THEME.colors.text.primary,
-          secondary: parsed.colors?.text?.secondary ?? DEFAULT_THEME.colors.text.secondary,
-          muted: parsed.colors?.text?.muted ?? DEFAULT_THEME.colors.text.muted,
-        },
-        accent: {
-          playing: parsed.colors?.accent?.playing ?? DEFAULT_THEME.colors.accent.playing,
-          paused: parsed.colors?.accent?.paused ?? DEFAULT_THEME.colors.accent.paused,
+          primary: readString(text.primary, DEFAULT_THEME.colors.text.primary),
+          secondary: readString(text.secondary, DEFAULT_THEME.colors.text.secondary),
+          muted: readString(text.muted, DEFAULT_THEME.colors.text.muted),
         },
         progress: {
-          track: parsed.colors?.progress?.track ?? DEFAULT_THEME.colors.progress.track,
-          fill: parsed.colors?.progress?.fill ?? DEFAULT_THEME.colors.progress.fill,
-          knob: parsed.colors?.progress?.knob ?? DEFAULT_THEME.colors.progress.knob,
+          track: readString(progress.track, DEFAULT_THEME.colors.progress.track),
+          fill: readString(progress.fill, DEFAULT_THEME.colors.progress.fill),
+          knob: readString(progress.knob, DEFAULT_THEME.colors.progress.knob),
         },
         button: {
-          normal: parsed.colors?.button?.normal ?? DEFAULT_THEME.colors.button.normal,
-          hover: parsed.colors?.button?.hover ?? DEFAULT_THEME.colors.button.hover,
-          disabled: parsed.colors?.button?.disabled ?? DEFAULT_THEME.colors.button.disabled,
+          normal: readString(button.normal, DEFAULT_THEME.colors.button.normal),
+          hover: readString(button.hover, DEFAULT_THEME.colors.button.hover),
+          disabled: readString(button.disabled, DEFAULT_THEME.colors.button.disabled),
         },
       },
-      borderRadius: parsed.borderRadius ?? DEFAULT_THEME.borderRadius,
-      fontFamily:
-        typeof parsed.fontFamily === 'string' ? parsed.fontFamily : DEFAULT_THEME.fontFamily,
+      borderRadius: readNumber(
+        input.borderRadius,
+        defaultBorderRadius,
+        BORDER_RADIUS_MIN,
+        BORDER_RADIUS_MAX
+      ),
+      fontFamily: readString(input.fontFamily, defaultFontFamily),
     };
   }
 }
