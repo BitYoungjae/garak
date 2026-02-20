@@ -1,6 +1,6 @@
 # Garak
 
-A GTK4-based MPRIS popup widget for Waybar on Wayland/Linux. The name **Garak** (가락) comes from the Korean word for "melody" or "tune" (as in 한 가락 — one song).
+A GTK4/Libadwaita MPRIS media popup for Hyprland on Wayland/Linux. The name **Garak** (가락) comes from the Korean word for "melody" or "tune" (as in 한 가락 — one song).
 
 [![한국어](https://img.shields.io/badge/lang-한국어-blue)](README.ko.md)
 ![GTK4](https://img.shields.io/badge/GTK4-4.0-blue)
@@ -29,10 +29,7 @@ A GTK4-based MPRIS popup widget for Waybar on Wayland/Linux. The name **Garak** 
 
 ### Compositor
 
-Any Wayland compositor supporting `gtk4-layer-shell`:
-
-- **Hyprland** (recommended) — Cursor-based smart positioning
-- **Wayfire, sway, etc.** — Works with center-aligned fallback positioning
+- **Hyprland** — Required for cursor-based popup positioning
 
 ## Installation
 
@@ -127,16 +124,25 @@ Create `~/.config/garak/theme.json` to customize colors:
 }
 ```
 
-## Waybar Integration
+## Launching
 
-Add to your Waybar config:
+Garak is a toggle — running it opens the popup, running it again closes it.
+
+### Hyprland keybinding
+
+```ini
+bind = $mainMod, M, exec, garak
+```
+
+### Waybar button
 
 ```json
-"modules-right": ["custom/mpris"],
+"modules-right": ["custom/garak"],
 
-"custom/mpris": {
-  "exec": "/usr/bin/garak",
-  "on-click": "/usr/bin/garak"
+"custom/garak": {
+  "format": "♪",
+  "on-click": "/usr/bin/garak",
+  "tooltip": false
 }
 ```
 
@@ -182,7 +188,7 @@ debug('my message', someValue);
 │   ├── window.ts         # Main popup window
 │   ├── services/         # Player, config, theme services
 │   └── widgets/          # UI components
-├── bin/garak             # Waybar launcher script
+├── bin/garak             # Launcher script
 └── config.example.json   # Configuration template
 ```
 

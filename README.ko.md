@@ -1,6 +1,6 @@
 # Garak
 
-Waybar에서 쓸 수 있는 GTK4 기반 미디어 컨트롤 팝업입니다. Wayland/Linux 환경에서 동작합니다.
+Hyprland 환경을 위한 GTK4/Libadwaita 기반 MPRIS 미디어 팝업입니다.
 
 **Garak(가락)**이라는 이름은 '노래 한 가락'할 때 그 가락, 즉 선율(melody)에서 따왔습니다.
 
@@ -28,12 +28,9 @@ Waybar에서 쓸 수 있는 GTK4 기반 미디어 컨트롤 팝업입니다. Way
 - `gtk4-layer-shell` — Wayland 레이어 셸 지원
 - `playerctl` — MPRIS 플레이어 제어 라이브러리
 
-### 지원하는 컴포지터
+### 컴포지터
 
-`gtk4-layer-shell`을 지원하는 Wayland 컴포지터면 됩니다.
-
-- **Hyprland** (권장) — 마우스 위치에 맞춰 팝업이 뜸
-- **Wayfire, sway 등** — 화면 중앙에 표시됨
+- **Hyprland** — 마우스 위치 기반 팝업 포지셔닝에 필수
 
 ## 설치
 
@@ -122,16 +119,25 @@ yay -S garak
 }
 ```
 
-## Waybar에서 사용하기
+## 실행 방법
 
-Waybar 설정 파일에 아래 내용을 추가하면 됩니다.
+Garak은 토글 방식으로 동작합니다. 실행하면 팝업이 열리고, 다시 실행하면 닫힙니다.
+
+### Hyprland 키바인딩
+
+```ini
+bind = $mainMod, M, exec, garak
+```
+
+### Waybar 버튼
 
 ```json
-"modules-right": ["custom/mpris"],
+"modules-right": ["custom/garak"],
 
-"custom/mpris": {
-  "exec": "/usr/bin/garak",
-  "on-click": "/usr/bin/garak"
+"custom/garak": {
+  "format": "♪",
+  "on-click": "/usr/bin/garak",
+  "tooltip": false
 }
 ```
 
@@ -172,7 +178,7 @@ debug('my message', someValue);
 │   ├── window.ts         # 메인 팝업 창
 │   ├── services/         # 플레이어, 설정, 테마 관련
 │   └── widgets/          # UI 컴포넌트들
-├── bin/garak             # Waybar용 실행 스크립트
+├── bin/garak             # 실행 스크립트
 └── config.example.json   # 설정 파일 예시
 ```
 

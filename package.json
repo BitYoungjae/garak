@@ -2,7 +2,7 @@
   "name": "garak",
   "version": "1.3.0",
   "type": "module",
-  "description": "GTK4 MPRIS popup widget for Waybar",
+  "description": "GTK4/Libadwaita MPRIS media popup for Hyprland",
   "main": "dist/main.js",
   "scripts": {
     "build": "node esbuild.config.js",
