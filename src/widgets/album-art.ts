@@ -1,5 +1,6 @@
 import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk';
+import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import Gdk from 'gi://Gdk';
@@ -14,6 +15,7 @@ export class AlbumArt extends Gtk.Box {
   private placeholderBox: Gtk.Box;
   private stack: Gtk.Stack;
   private currentUrl: string | null = null;
+  private loadRequestId: number = 0;
   private _size: number = 80;
 
   constructor(size: number = 80) {
@@ -73,20 +75,18 @@ export class AlbumArt extends Gtk.Box {
     this.append(this.stack);
   }
 
-  get size(): number {
-    return this._size;
-  }
-
   setArtUrl(url: string | null): void {
     if (url === this.currentUrl) return;
     this.currentUrl = url;
+    const requestId = ++this.loadRequestId;
 
     if (!url) {
       this.showPlaceholder();
+      this.picture.set_paintable(null);
       return;
     }
 
-    this.loadImage(url);
+    this.loadImage(url, requestId);
   }
 
   private showPlaceholder(): void {
@@ -125,39 +125,39 @@ export class AlbumArt extends Gtk.Box {
     this.stack.set_visible_child_name('image');
   }
 
-  private async loadImage(url: string): Promise<void> {
-    try {
-      const file = Gio.File.new_for_uri(url);
+  private createFile(url: string): Gio.File {
+    const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url);
+    return hasScheme ? Gio.File.new_for_uri(url) : Gio.File.new_for_path(url);
+  }
 
-      if (url.startsWith('file://')) {
-        // Local file - load and scale
-        file.read_async(0, null, (source, result) => {
-          try {
-            const stream = (source as Gio.File).read_finish(result);
-            const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
+  private loadImage(url: string, requestId: number): void {
+    try {
+      const file = this.createFile(url);
+      file.read_async(GLib.PRIORITY_DEFAULT, null, (source, result) => {
+        let stream: Gio.FileInputStream | null = null;
+        try {
+          stream = (source as Gio.File).read_finish(result);
+          const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
+          if (requestId === this.loadRequestId) {
             this.setScaledPixbuf(pixbuf);
-            stream.close(null);
-          } catch (e) {
-            console.error('Failed to load album art:', e);
+          }
+        } catch (error) {
+          if (requestId === this.loadRequestId) {
+            console.error('Failed to load album art:', error);
             this.showPlaceholder();
           }
-        });
-      } else {
-        // Remote URL - load asynchronously
-        file.read_async(0, null, (source, result) => {
-          try {
-            const stream = (source as Gio.File).read_finish(result);
-            const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
-            this.setScaledPixbuf(pixbuf);
-            stream.close(null);
-          } catch (e) {
-            console.error('Failed to load album art:', e);
-            this.showPlaceholder();
+        } finally {
+          if (stream) {
+            try {
+              stream.close(null);
+            } catch {
+              // Ignore close errors from disposed streams
+            }
           }
-        });
-      }
-    } catch (e) {
-      console.error('Failed to load album art:', e);
+        }
+      });
+    } catch (error) {
+      console.error('Failed to load album art:', error);
       this.showPlaceholder();
     }
   }
