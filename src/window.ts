@@ -413,6 +413,7 @@ export class PopupWindow extends Adw.ApplicationWindow {
   private connectPlayerService(): void {
     this.playerService.connect('metadata-changed', () => {
       this.updateMetadata();
+      this.updateProgress();
     });
 
     this.playerService.connect('state-changed', () => {

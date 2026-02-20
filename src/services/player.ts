@@ -2,6 +2,7 @@ import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import Playerctl from 'gi://Playerctl';
+import { debug } from '../debug.js';
 
 export interface PlayerMetadata {
   title: string;
@@ -98,7 +99,9 @@ export class PlayerService extends GObject.Object {
       'player-appeared',
       (_mgr: Playerctl.PlayerManager, player: Playerctl.Player) => {
         const playerName = this.getPlayerName(player);
+        debug(`player-appeared: ${playerName}`);
         if (this.isProxyPlayer(playerName) || this.isManagedPlayerName(playerName)) {
+          debug(`player-appeared: skipped (proxy or duplicate)`);
           return;
         }
 
@@ -111,6 +114,8 @@ export class PlayerService extends GObject.Object {
     this.connectManagerSignal(
       'player-vanished',
       (_mgr: Playerctl.PlayerManager, player: Playerctl.Player) => {
+        const playerName = this.getPlayerName(player);
+        debug(`player-vanished: ${playerName}`);
         this.managedPlayers = this.managedPlayers.filter((p) => p !== player);
         this.disconnectPlayerSignals(player);
         if (player === this.player) {
@@ -183,14 +188,23 @@ export class PlayerService extends GObject.Object {
 
     ids.push(
       player.connect('playback-status', () => {
+        const name = this.getPlayerName(player);
+        const status = this.getPlaybackStatus(player);
+        debug(`playback-status signal: player=${name}, status=${status}`);
         this.onPlaybackStatusChanged(player);
       })
     );
 
     ids.push(
       player.connect('metadata', () => {
-        if (player === this.player) {
+        const isCurrent = player === this.player;
+        const name = this.getPlayerName(player);
+        debug(`metadata signal: player=${name}, isCurrent=${isCurrent}`);
+        if (isCurrent) {
           this.updateMetadata();
+          debug(
+            `after updateMetadata: title="${this._metadata.title}", length=${this._metadata.length}`
+          );
           this.emit('metadata-changed');
         }
       })
@@ -283,10 +297,15 @@ export class PlayerService extends GObject.Object {
   }
 
   private switchToPlayer(newPlayer: Playerctl.Player): void {
+    const name = this.getPlayerName(newPlayer);
+    debug(`switchToPlayer: ${name}`);
     this.stopPositionPolling();
     this.player = newPlayer;
     this.updateMetadata();
     this.updateState();
+    debug(
+      `switchToPlayer done: title="${this._metadata.title}", length=${this._metadata.length}, status=${this._state.status}`
+    );
     this.emit('metadata-changed');
     this.emit('state-changed');
     if (this._state.status === 'playing') {
@@ -326,10 +345,42 @@ export class PlayerService extends GObject.Object {
   }
 
   private getLength(): number {
-    try {
-      const value = this.getPlayerMetadataVariant()?.lookup_value('mpris:length', null);
-      if (!value) return 0;
+    const length = this.parseLengthVariant(
+      this.getPlayerMetadataVariant()?.lookup_value('mpris:length', null)
+    );
+    if (length > 0) return length;
 
+    // Playerctl cache can be stale after track changes — read directly from D-Bus
+    return this.getLengthFromDBus();
+  }
+
+  private getLengthFromDBus(): number {
+    if (!this.player) return 0;
+    try {
+      const playerName = this.getPlayerName(this.player);
+      const busName = `org.mpris.MediaPlayer2.${playerName}`;
+      const bus = Gio.bus_get_sync(Gio.BusType.SESSION, null);
+      const reply = bus.call_sync(
+        busName,
+        '/org/mpris/MediaPlayer2',
+        'org.freedesktop.DBus.Properties',
+        'Get',
+        new GLib.Variant('(ss)', ['org.mpris.MediaPlayer2.Player', 'Metadata']),
+        GLib.VariantType.new('(v)'),
+        Gio.DBusCallFlags.NONE,
+        -1,
+        null
+      );
+      const metadata = reply.get_child_value(0).get_variant();
+      return this.parseLengthVariant(metadata?.lookup_value('mpris:length', null));
+    } catch {
+      return 0;
+    }
+  }
+
+  private parseLengthVariant(value: GLib.Variant | null | undefined): number {
+    if (!value) return 0;
+    try {
       const typeStr = value.get_type_string();
       if (typeStr === 'x') return Number(value.get_int64());
       if (typeStr === 't') return Number(value.get_uint64());
@@ -392,6 +443,22 @@ export class PlayerService extends GObject.Object {
 
     this.positionPollId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
       this.updatePosition();
+
+      if (this._metadata.length === 0) {
+        const playerctlLen = this.parseLengthVariant(
+          this.getPlayerMetadataVariant()?.lookup_value('mpris:length', null)
+        );
+        const dbusLen = this.getLengthFromDBus();
+        const length = playerctlLen > 0 ? playerctlLen : dbusLen;
+        debug(
+          `poll: length was 0, playerctl=${playerctlLen}, dbus=${dbusLen}, title="${this._metadata.title}"`
+        );
+        if (length > 0) {
+          this._metadata.length = length;
+          this.emit('metadata-changed');
+        }
+      }
+
       this.emit('position-changed');
       return GLib.SOURCE_CONTINUE;
     });
