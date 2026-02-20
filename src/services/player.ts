@@ -53,6 +53,7 @@ export class PlayerService extends GObject.Object {
   private managerSignalIds: number[] = [];
   private playerSignalIds: Map<Playerctl.Player, number[]> = new Map();
   private managedPlayers: Playerctl.Player[] = [];
+  private preferredPlayers: string[];
 
   private _metadata: PlayerMetadata = createDefaultMetadata();
   private _state: PlayerState = createDefaultState();
@@ -70,8 +71,9 @@ export class PlayerService extends GObject.Object {
     return this.player !== null;
   }
 
-  constructor() {
+  constructor(preferredPlayers: string[] = []) {
     super();
+    this.preferredPlayers = preferredPlayers.map((p) => p.toLowerCase());
     this.manager = new Playerctl.PlayerManager();
     this.setupManager();
     this.initExistingPlayers();
@@ -143,6 +145,12 @@ export class PlayerService extends GObject.Object {
 
   private isProxyPlayer(name: string): boolean {
     return name === 'playerctld' || name.startsWith('playerctld.');
+  }
+
+  private getPlayerPriority(player: Playerctl.Player): number {
+    const name = this.getPlayerName(player).toLowerCase();
+    const idx = this.preferredPlayers.indexOf(name);
+    return idx === -1 ? this.preferredPlayers.length : idx;
   }
 
   private isManagedPlayerName(name: string): boolean {
@@ -285,11 +293,19 @@ export class PlayerService extends GObject.Object {
       return;
     }
 
-    // Prefer playing, then paused, then first available
-    const best =
-      players.find((p) => this.getPlaybackStatus(p) === Playerctl.PlaybackStatus.PLAYING) ??
-      players.find((p) => this.getPlaybackStatus(p) === Playerctl.PlaybackStatus.PAUSED) ??
-      players[0];
+    // Sort by: playback status (playing > paused > stopped), then user preference
+    const statusScore = (p: Playerctl.Player): number => {
+      const s = this.getPlaybackStatus(p);
+      if (s === Playerctl.PlaybackStatus.PLAYING) return 0;
+      if (s === Playerctl.PlaybackStatus.PAUSED) return 1;
+      return 2;
+    };
+
+    const best = players.reduce((a, b) => {
+      const sd = statusScore(a) - statusScore(b);
+      if (sd !== 0) return sd < 0 ? a : b;
+      return this.getPlayerPriority(a) <= this.getPlayerPriority(b) ? a : b;
+    });
 
     if (best !== this.player) {
       this.switchToPlayer(best);

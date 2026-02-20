@@ -88,11 +88,35 @@ Create `~/.config/garak/config.json`:
   "albumFontSize": 0.9,
   "timeFontSize": 0.85,
   "cursorOffsetX": 0,
-  "cursorOffsetY": -4
+  "cursorOffsetY": -4,
+  "centerOnCursor": false,
+  "preferredPlayers": ["spotify"]
 }
 ```
 
 See `config.example.json` for all available options.
+
+#### Popup Positioning
+
+By default, the popup appears below the cursor. Set `centerOnCursor` to `true` to vertically center the popup on the cursor instead. Fine-tune with `cursorOffsetX` / `cursorOffsetY`.
+
+```json
+{
+  "centerOnCursor": true,
+  "cursorOffsetX": 0,
+  "cursorOffsetY": -4
+}
+```
+
+#### Player Priority
+
+When multiple MPRIS players are running (e.g. Spotify and a browser), Garak picks the best one by playback status (playing > paused > stopped). If multiple players share the same status, `preferredPlayers` breaks the tie — players listed first are preferred. Unlisted players are still used as a fallback.
+
+```json
+{
+  "preferredPlayers": ["spotify", "vlc"]
+}
+```
 
 ### Theme
 

@@ -44,7 +44,7 @@ export class PopupWindow extends Adw.ApplicationWindow {
     this.themeService = themeService;
     this.popupWidth = configService.config.popupWidth;
 
-    this.playerService = new PlayerService();
+    this.playerService = new PlayerService(configService.config.preferredPlayers);
 
     this.initLayerShell();
     this.setupKeyController();

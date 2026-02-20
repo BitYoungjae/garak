@@ -1,4 +1,10 @@
-import { buildGarakConfigPath, isJsonObject, loadJsonFileSync, readNumber } from './json-file.js';
+import {
+  buildGarakConfigPath,
+  isJsonObject,
+  loadJsonFileSync,
+  readNumber,
+  readStringArray,
+} from './json-file.js';
 
 const DEFAULT_PADDING = 20;
 const DEFAULT_SECTION_SPACING = 12;
@@ -42,6 +48,7 @@ export interface Config {
   cursorOffsetX?: number;
   cursorOffsetY?: number;
   centerOnCursor?: boolean;
+  preferredPlayers?: string[];
 }
 
 const DEFAULT_CONFIG: Required<Config> = {
@@ -67,6 +74,7 @@ const DEFAULT_CONFIG: Required<Config> = {
   cursorOffsetX: 0,
   cursorOffsetY: -4,
   centerOnCursor: false,
+  preferredPlayers: [],
 };
 
 export class ConfigService {
@@ -185,6 +193,7 @@ export class ConfigService {
         typeof input.centerOnCursor === 'boolean'
           ? input.centerOnCursor
           : DEFAULT_CONFIG.centerOnCursor,
+      preferredPlayers: readStringArray(input.preferredPlayers),
     };
   }
 }
