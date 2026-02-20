@@ -17,5 +17,7 @@
   "titleFontSize": 1.1,
   "artistFontSize": 1.0,
   "albumFontSize": 0.9,
-  "timeFontSize": 0.85
+  "timeFontSize": 0.85,
+  "cursorOffsetX": 0,
+  "cursorOffsetY": -4
 }

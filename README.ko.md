@@ -72,16 +72,21 @@ yay -S garak
   "progressBarHeight": 6,
   "playPauseButtonSize": 48,
   "controlButtonSize": 36,
+  "padding": 20,
   "paddingTop": 20,
   "paddingBottom": 25,
   "paddingLeft": 20,
   "paddingRight": 20,
   "sectionSpacing": 12,
+  "albumArtSpacing": 16,
+  "controlButtonSpacing": 12,
   "baseFontSize": 15,
   "titleFontSize": 1.1,
   "artistFontSize": 1.0,
   "albumFontSize": 0.9,
-  "timeFontSize": 0.85
+  "timeFontSize": 0.85,
+  "cursorOffsetX": 0,
+  "cursorOffsetY": -4
 }
 ```
 
@@ -100,10 +105,6 @@ yay -S garak
       "primary": "#E4E4E7",
       "secondary": "#A1A1AA",
       "muted": "#71717A"
-    },
-    "accent": {
-      "playing": "#81C784",
-      "paused": "#52525B"
     },
     "progress": {
       "track": "#27272A",
