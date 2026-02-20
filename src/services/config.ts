@@ -41,6 +41,7 @@ export interface Config {
   albumArtBorderRadius?: number;
   cursorOffsetX?: number;
   cursorOffsetY?: number;
+  centerOnCursor?: boolean;
 }
 
 const DEFAULT_CONFIG: Required<Config> = {
@@ -65,6 +66,7 @@ const DEFAULT_CONFIG: Required<Config> = {
   albumArtBorderRadius: DEFAULT_ALBUM_ART_BORDER_RADIUS,
   cursorOffsetX: 0,
   cursorOffsetY: -4,
+  centerOnCursor: false,
 };
 
 export class ConfigService {
@@ -179,6 +181,10 @@ export class ConfigService {
       ),
       cursorOffsetX: readNumber(input.cursorOffsetX, DEFAULT_CONFIG.cursorOffsetX, -200, 200),
       cursorOffsetY: readNumber(input.cursorOffsetY, DEFAULT_CONFIG.cursorOffsetY, -200, 200),
+      centerOnCursor:
+        typeof input.centerOnCursor === 'boolean'
+          ? input.centerOnCursor
+          : DEFAULT_CONFIG.centerOnCursor,
     };
   }
 }

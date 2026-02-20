@@ -51,6 +51,7 @@ export class PopupWindow extends Adw.ApplicationWindow {
     this.setupFocusHandler();
     this.loadCSS();
     this.buildUI();
+    this.positionOnCursor();
     this.connectPlayerService();
     this.updateUI();
   }
@@ -77,6 +78,12 @@ export class PopupWindow extends Adw.ApplicationWindow {
     // Anchor to top and left for precise positioning
     GtkLayerShell.set_anchor(this, GtkLayerShell.Edge.TOP, true);
     GtkLayerShell.set_anchor(this, GtkLayerShell.Edge.LEFT, true);
+  }
+
+  private positionOnCursor(): void {
+    if (!GtkLayerShell.is_supported() || !GtkLayerShell.is_layer_window(this)) {
+      return;
+    }
 
     const cursorPos = this.getCursorPosition();
     const focusedMonitor = this.getFocusedMonitor();
@@ -84,7 +91,7 @@ export class PopupWindow extends Adw.ApplicationWindow {
       return;
     }
 
-    const { cursorOffsetX, cursorOffsetY } = this.configService.config;
+    const { cursorOffsetX, cursorOffsetY, centerOnCursor } = this.configService.config;
     const monitorWidth = focusedMonitor.width / focusedMonitor.scale;
     const topReservedInset = this.getTopReservedInset(focusedMonitor);
 
@@ -92,9 +99,19 @@ export class PopupWindow extends Adw.ApplicationWindow {
     const centered = cursorPos.x + cursorOffsetX - this.popupWidth / 2;
     const maxLeft = monitorWidth - this.popupWidth;
     const leftMargin = Math.max(0, Math.min(centered, maxLeft));
-    const topMargin = Math.max(0, cursorPos.y - topReservedInset + cursorOffsetY);
 
-    GtkLayerShell.set_margin(this, GtkLayerShell.Edge.TOP, topMargin);
+    let topMargin: number;
+    if (centerOnCursor) {
+      const content = this.get_content();
+      const popupHeight = content
+        ? content.measure(Gtk.Orientation.VERTICAL, this.popupWidth)[1]
+        : 0;
+      topMargin = cursorPos.y - topReservedInset + cursorOffsetY - popupHeight / 2;
+    } else {
+      topMargin = cursorPos.y - topReservedInset + cursorOffsetY;
+    }
+
+    GtkLayerShell.set_margin(this, GtkLayerShell.Edge.TOP, Math.max(0, topMargin));
     GtkLayerShell.set_margin(this, GtkLayerShell.Edge.LEFT, leftMargin);
   }
 
