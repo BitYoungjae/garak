@@ -1,6 +1,6 @@
+import 'gi://Gtk4LayerShell?version=1.0';
 import 'gi://Gtk?version=4.0';
 import 'gi://Adw?version=1';
-import 'gi://Gtk4LayerShell?version=1.0';
 
 import GObject from 'gi://GObject';
 import Adw from 'gi://Adw';

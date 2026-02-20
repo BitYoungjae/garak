@@ -1,4 +1,41 @@
 #!/bin/sh
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-export LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so
+
+find_layer_shell_lib() {
+  for lib in \
+    /usr/lib/libgtk4-layer-shell.so \
+    /usr/lib/libgtk4-layer-shell.so.0 \
+    /usr/lib64/libgtk4-layer-shell.so \
+    /usr/lib64/libgtk4-layer-shell.so.0 \
+    /usr/lib/x86_64-linux-gnu/libgtk4-layer-shell.so \
+    /usr/lib/x86_64-linux-gnu/libgtk4-layer-shell.so.0
+  do
+    if [ -r "$lib" ]; then
+      printf '%s' "$lib"
+      return 0
+    fi
+  done
+
+  if command -v ldconfig >/dev/null 2>&1; then
+    ldconfig -p 2>/dev/null | awk '/libgtk4-layer-shell\.so(\.0)?/ { print $NF; exit }'
+  fi
+}
+
+prepend_preload() {
+  lib="$1"
+  [ -z "$lib" ] && return 0
+
+  if [ -z "${LD_PRELOAD:-}" ]; then
+    LD_PRELOAD="$lib"
+  else
+    case ":$LD_PRELOAD:" in
+      *":$lib:"*) ;;
+      *) LD_PRELOAD="$lib:$LD_PRELOAD" ;;
+    esac
+  fi
+
+  export LD_PRELOAD
+}
+
+prepend_preload "$(find_layer_shell_lib)"
 exec gjs -m "$SCRIPT_DIR/../dist/main.js" "$@"

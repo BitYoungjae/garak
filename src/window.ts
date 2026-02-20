@@ -1,9 +1,9 @@
 import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
+import GtkLayerShell from 'gi://Gtk4LayerShell';
 import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
 import Gdk from 'gi://Gdk';
-import GtkLayerShell from 'gi://Gtk4LayerShell';
 
 import { PlayerService } from './services/player.js';
 import { ConfigService } from './services/config.js';
@@ -51,7 +51,20 @@ export class PopupWindow extends Adw.ApplicationWindow {
   }
 
   private initLayerShell(): void {
+    if (!GtkLayerShell.is_supported()) {
+      console.warn('gtk4-layer-shell is not supported in this session; using regular window mode.');
+      return;
+    }
+
     GtkLayerShell.init_for_window(this);
+
+    if (!GtkLayerShell.is_layer_window(this)) {
+      console.warn(
+        'gtk4-layer-shell failed to initialize for this window; using regular window mode.'
+      );
+      return;
+    }
+
     GtkLayerShell.set_namespace(this, 'garak');
     GtkLayerShell.set_layer(this, GtkLayerShell.Layer.TOP);
     GtkLayerShell.set_keyboard_mode(this, GtkLayerShell.KeyboardMode.ON_DEMAND);
