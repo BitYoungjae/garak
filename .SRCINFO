@@ -12,6 +12,6 @@ pkgbase = garak
 	depends = gtk4-layer-shell
 	depends = playerctl
 	source = garak-1.5.0.tar.gz::https://github.com/bityoungjae/garak/archive/refs/tags/v1.5.0.tar.gz
-	sha256sums = SKIP
+	sha256sums = 5dd437b0c19569afaa672f35c1c5f0a6e07e04178ef7e93a7023486da5d01601
 
 pkgname = garak
