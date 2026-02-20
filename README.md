@@ -1,6 +1,6 @@
 # Garak
 
-A GTK4-based MPRIS popup widget for Waybar on Wayland/Linux. The name **Garak** (가락) comes from the Korean word for "melody" or "tune" (as in 한 가락 — one song).
+A GTK4/Libadwaita MPRIS media popup for Hyprland on Wayland/Linux. The name **Garak** (가락) comes from the Korean word for "melody" or "tune" (as in 한 가락 — one song).
 
 [![한국어](https://img.shields.io/badge/lang-한국어-blue)](README.ko.md)
 ![GTK4](https://img.shields.io/badge/GTK4-4.0-blue)
@@ -29,10 +29,7 @@ A GTK4-based MPRIS popup widget for Waybar on Wayland/Linux. The name **Garak** 
 
 ### Compositor
 
-Any Wayland compositor supporting `gtk4-layer-shell`:
-
-- **Hyprland** (recommended) — Cursor-based smart positioning
-- **Wayfire, sway, etc.** — Works with center-aligned fallback positioning
+- **Hyprland** — Required for cursor-based popup positioning
 
 ## Installation
 
@@ -77,16 +74,21 @@ Create `~/.config/garak/config.json`:
   "progressBarHeight": 6,
   "playPauseButtonSize": 48,
   "controlButtonSize": 36,
+  "padding": 20,
   "paddingTop": 20,
   "paddingBottom": 25,
   "paddingLeft": 20,
   "paddingRight": 20,
   "sectionSpacing": 12,
+  "albumArtSpacing": 16,
+  "controlButtonSpacing": 12,
   "baseFontSize": 15,
   "titleFontSize": 1.1,
   "artistFontSize": 1.0,
   "albumFontSize": 0.9,
-  "timeFontSize": 0.85
+  "timeFontSize": 0.85,
+  "cursorOffsetX": 0,
+  "cursorOffsetY": -4
 }
 ```
 
@@ -106,10 +108,6 @@ Create `~/.config/garak/theme.json` to customize colors:
       "secondary": "#A1A1AA",
       "muted": "#71717A"
     },
-    "accent": {
-      "playing": "#81C784",
-      "paused": "#52525B"
-    },
     "progress": {
       "track": "#27272A",
       "fill": "#94A3B8",
@@ -126,16 +124,25 @@ Create `~/.config/garak/theme.json` to customize colors:
 }
 ```
 
-## Waybar Integration
+## Launching
 
-Add to your Waybar config:
+Garak is a toggle — running it opens the popup, running it again closes it.
+
+### Hyprland keybinding
+
+```ini
+bind = $mainMod, M, exec, garak
+```
+
+### Waybar button
 
 ```json
-"modules-right": ["custom/mpris"],
+"modules-right": ["custom/garak"],
 
-"custom/mpris": {
-  "exec": "/usr/bin/garak",
-  "on-click": "/usr/bin/garak"
+"custom/garak": {
+  "format": "♪",
+  "on-click": "/usr/bin/garak",
+  "tooltip": false
 }
 ```
 
@@ -152,6 +159,27 @@ npm run build
 npm run start:debug
 ```
 
+### Debug Logging
+
+Set the `GARAK_DEBUG` environment variable to enable debug output. When enabled, internal events like player detection, metadata updates, and playback status changes are logged to the console with a `[DBG]` prefix.
+
+```bash
+# Using npm script (recommended)
+npm run start:debug
+
+# Or manually
+GARAK_DEBUG=1 ./bin/garak
+```
+
+To add debug logging in your code, import and use the `debug()` function:
+
+```ts
+import { debug } from '../debug.js';
+
+debug('my message', someValue);
+// → [DBG] my message <someValue>
+```
+
 ## Project Structure
 
 ```
@@ -160,7 +188,7 @@ npm run start:debug
 │   ├── window.ts         # Main popup window
 │   ├── services/         # Player, config, theme services
 │   └── widgets/          # UI components
-├── bin/garak             # Waybar launcher script
+├── bin/garak             # Launcher script
 └── config.example.json   # Configuration template
 ```
 

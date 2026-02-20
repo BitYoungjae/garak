@@ -1,6 +1,6 @@
 # Garak
 
-Waybar에서 쓸 수 있는 GTK4 기반 미디어 컨트롤 팝업입니다. Wayland/Linux 환경에서 동작합니다.
+Hyprland 환경을 위한 GTK4/Libadwaita 기반 MPRIS 미디어 팝업입니다.
 
 **Garak(가락)**이라는 이름은 '노래 한 가락'할 때 그 가락, 즉 선율(melody)에서 따왔습니다.
 
@@ -28,12 +28,9 @@ Waybar에서 쓸 수 있는 GTK4 기반 미디어 컨트롤 팝업입니다. Way
 - `gtk4-layer-shell` — Wayland 레이어 셸 지원
 - `playerctl` — MPRIS 플레이어 제어 라이브러리
 
-### 지원하는 컴포지터
+### 컴포지터
 
-`gtk4-layer-shell`을 지원하는 Wayland 컴포지터면 됩니다.
-
-- **Hyprland** (권장) — 마우스 위치에 맞춰 팝업이 뜸
-- **Wayfire, sway 등** — 화면 중앙에 표시됨
+- **Hyprland** — 마우스 위치 기반 팝업 포지셔닝에 필수
 
 ## 설치
 
@@ -72,16 +69,21 @@ yay -S garak
   "progressBarHeight": 6,
   "playPauseButtonSize": 48,
   "controlButtonSize": 36,
+  "padding": 20,
   "paddingTop": 20,
   "paddingBottom": 25,
   "paddingLeft": 20,
   "paddingRight": 20,
   "sectionSpacing": 12,
+  "albumArtSpacing": 16,
+  "controlButtonSpacing": 12,
   "baseFontSize": 15,
   "titleFontSize": 1.1,
   "artistFontSize": 1.0,
   "albumFontSize": 0.9,
-  "timeFontSize": 0.85
+  "timeFontSize": 0.85,
+  "cursorOffsetX": 0,
+  "cursorOffsetY": -4
 }
 ```
 
@@ -101,10 +103,6 @@ yay -S garak
       "secondary": "#A1A1AA",
       "muted": "#71717A"
     },
-    "accent": {
-      "playing": "#81C784",
-      "paused": "#52525B"
-    },
     "progress": {
       "track": "#27272A",
       "fill": "#94A3B8",
@@ -121,16 +119,25 @@ yay -S garak
 }
 ```
 
-## Waybar에서 사용하기
+## 실행 방법
 
-Waybar 설정 파일에 아래 내용을 추가하면 됩니다.
+Garak은 토글 방식으로 동작합니다. 실행하면 팝업이 열리고, 다시 실행하면 닫힙니다.
+
+### Hyprland 키바인딩
+
+```ini
+bind = $mainMod, M, exec, garak
+```
+
+### Waybar 버튼
 
 ```json
-"modules-right": ["custom/mpris"],
+"modules-right": ["custom/garak"],
 
-"custom/mpris": {
-  "exec": "/usr/bin/garak",
-  "on-click": "/usr/bin/garak"
+"custom/garak": {
+  "format": "♪",
+  "on-click": "/usr/bin/garak",
+  "tooltip": false
 }
 ```
 
@@ -142,6 +149,27 @@ npm run build        # 빌드
 npm run start:debug  # 디버그 모드로 실행
 ```
 
+### 디버그 로그
+
+`GARAK_DEBUG` 환경 변수를 설정하면 디버그 로그가 활성화됩니다. 플레이어 감지, 메타데이터 갱신, 재생 상태 변경 등 내부 이벤트가 `[DBG]` 접두사와 함께 콘솔에 출력됩니다.
+
+```bash
+# npm 스크립트 사용 (권장)
+npm run start:debug
+
+# 또는 직접 실행
+GARAK_DEBUG=1 ./bin/garak
+```
+
+코드에서 디버그 로그를 추가하려면 `debug()` 함수를 임포트해서 사용하면 됩니다:
+
+```ts
+import { debug } from '../debug.js';
+
+debug('my message', someValue);
+// → [DBG] my message <someValue>
+```
+
 ## 프로젝트 구조
 
 ```
@@ -150,7 +178,7 @@ npm run start:debug  # 디버그 모드로 실행
 │   ├── window.ts         # 메인 팝업 창
 │   ├── services/         # 플레이어, 설정, 테마 관련
 │   └── widgets/          # UI 컴포넌트들
-├── bin/garak             # Waybar용 실행 스크립트
+├── bin/garak             # 실행 스크립트
 └── config.example.json   # 설정 파일 예시
 ```
 

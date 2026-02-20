@@ -1,6 +1,10 @@
 import eslint from '@eslint/js';
+import eslintConfigPrettier from 'eslint-config-prettier';
 import tseslint from 'typescript-eslint';
 
-export default tseslint.config(eslint.configs.recommended, ...tseslint.configs.recommended, {
-  ignores: ['dist/**', 'node_modules/**', '*.config.js', '.husky/**'],
-});
+export default tseslint.config(
+  { ignores: ['dist/**', 'node_modules/**', '*.config.js', 'knip.ts', '.husky/**'] },
+  eslint.configs.recommended,
+  ...tseslint.configs.recommended,
+  eslintConfigPrettier
+);

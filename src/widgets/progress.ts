@@ -1,5 +1,8 @@
 import GObject from 'gi://GObject';
+import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
+
+const SEEK_COMMIT_DELAY_MS = 140;
 
 export class Progress extends Gtk.Box {
   static {
@@ -19,6 +22,8 @@ export class Progress extends Gtk.Box {
   private totalTimeLabel: Gtk.Label;
   private isDragging: boolean = false;
   private currentLength: number = 0;
+  private seekCommitTimeoutId: number | null = null;
+  private suppressSeekSignal: boolean = false;
 
   constructor() {
     super({
@@ -43,23 +48,36 @@ export class Progress extends Gtk.Box {
       cssClasses: ['progress-scale'],
     });
 
-    // Track drag state using change-value signal
     this.scale.connect('change-value', (_scale, _scroll, value) => {
+      if (this.currentLength <= 0) {
+        return false;
+      }
+
       this.isDragging = true;
-      // Update time label to show seek position during drag
-      const seekPosition = (value / 100) * this.currentLength;
+      const seekPosition = this.positionFromPercent(value);
       this.currentTimeLabel.set_label(this.formatTime(seekPosition));
-      return false; // Let default handler run
+      this.scheduleSeekCommit();
+      return false;
     });
 
-    // Emit seek signal when value changes and we were dragging
+    const clickGesture = new Gtk.GestureClick();
+    clickGesture.connect('released', () => {
+      this.commitSeek();
+    });
+    this.scale.add_controller(clickGesture);
+
     this.adjustment.connect('value-changed', () => {
-      if (this.isDragging) {
-        this.isDragging = false;
-        const value = this.adjustment.get_value();
-        const seekPosition = Math.floor((value / 100) * this.currentLength);
-        this.emit('seek', seekPosition);
+      if (this.suppressSeekSignal || !this.isDragging || this.currentLength <= 0) {
+        return;
       }
+
+      const seekPosition = this.positionFromPercent(this.adjustment.get_value());
+      this.currentTimeLabel.set_label(this.formatTime(seekPosition));
+      this.scheduleSeekCommit();
+    });
+
+    this.connect('destroy', () => {
+      this.clearSeekCommitTimeout();
     });
 
     const timeBox = new Gtk.Box({
@@ -88,17 +106,48 @@ export class Progress extends Gtk.Box {
   }
 
   setProgress(position: number, length: number): void {
-    // position and length are in microseconds
     this.currentLength = length;
 
-    // Only update if not dragging
     if (!this.isDragging) {
       const fraction = length > 0 ? (position / length) * 100 : 0;
+      this.suppressSeekSignal = true;
       this.adjustment.set_value(Math.min(100, Math.max(0, fraction)));
+      this.suppressSeekSignal = false;
       this.currentTimeLabel.set_label(this.formatTime(position));
     }
 
     this.totalTimeLabel.set_label(this.formatTime(length));
+  }
+
+  private positionFromPercent(percent: number): number {
+    const bounded = Math.min(100, Math.max(0, percent));
+    return Math.floor((bounded / 100) * this.currentLength);
+  }
+
+  private scheduleSeekCommit(): void {
+    this.clearSeekCommitTimeout();
+    this.seekCommitTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SEEK_COMMIT_DELAY_MS, () => {
+      this.commitSeek();
+      return GLib.SOURCE_REMOVE;
+    });
+  }
+
+  private clearSeekCommitTimeout(): void {
+    if (this.seekCommitTimeoutId !== null) {
+      GLib.source_remove(this.seekCommitTimeoutId);
+      this.seekCommitTimeoutId = null;
+    }
+  }
+
+  private commitSeek(): void {
+    if (!this.isDragging || this.currentLength <= 0) {
+      this.clearSeekCommitTimeout();
+      return;
+    }
+
+    this.clearSeekCommitTimeout();
+    this.isDragging = false;
+    this.emit('seek', this.positionFromPercent(this.adjustment.get_value()));
   }
 
   private formatTime(microseconds: number): string {

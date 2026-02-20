@@ -1,9 +1,9 @@
 import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
+import GtkLayerShell from 'gi://Gtk4LayerShell';
 import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
 import Gdk from 'gi://Gdk';
-import GtkLayerShell from 'gi://Gtk4LayerShell';
 
 import { PlayerService } from './services/player.js';
 import { ConfigService } from './services/config.js';
@@ -13,12 +13,17 @@ import { TrackInfo } from './widgets/track-info.js';
 import { Controls } from './widgets/controls.js';
 import { Progress } from './widgets/progress.js';
 
+interface HyprMonitor {
+  width: number;
+  scale: number;
+  focused?: boolean;
+  reserved?: unknown;
+}
+
 export class PopupWindow extends Adw.ApplicationWindow {
   static {
     GObject.registerClass(this);
   }
-
-  private static readonly TOP_MARGIN = 4;
 
   private playerService: PlayerService;
   private configService: ConfigService;
@@ -37,7 +42,7 @@ export class PopupWindow extends Adw.ApplicationWindow {
 
     this.configService = configService;
     this.themeService = themeService;
-    this.popupWidth = configService.popupWidth;
+    this.popupWidth = configService.config.popupWidth;
 
     this.playerService = new PlayerService();
 
@@ -51,7 +56,20 @@ export class PopupWindow extends Adw.ApplicationWindow {
   }
 
   private initLayerShell(): void {
+    if (!GtkLayerShell.is_supported()) {
+      console.warn('gtk4-layer-shell is not supported in this session; using regular window mode.');
+      return;
+    }
+
     GtkLayerShell.init_for_window(this);
+
+    if (!GtkLayerShell.is_layer_window(this)) {
+      console.warn(
+        'gtk4-layer-shell failed to initialize for this window; using regular window mode.'
+      );
+      return;
+    }
+
     GtkLayerShell.set_namespace(this, 'garak');
     GtkLayerShell.set_layer(this, GtkLayerShell.Layer.TOP);
     GtkLayerShell.set_keyboard_mode(this, GtkLayerShell.KeyboardMode.ON_DEMAND);
@@ -60,56 +78,82 @@ export class PopupWindow extends Adw.ApplicationWindow {
     GtkLayerShell.set_anchor(this, GtkLayerShell.Edge.TOP, true);
     GtkLayerShell.set_anchor(this, GtkLayerShell.Edge.LEFT, true);
 
-    // Get cursor position for horizontal centering
     const cursorPos = this.getCursorPosition();
-    const monitorWidth = this.getMonitorWidth();
+    const focusedMonitor = this.getFocusedMonitor();
+    if (!cursorPos || !focusedMonitor) {
+      return;
+    }
+
+    const { cursorOffsetX, cursorOffsetY } = this.configService.config;
+    const monitorWidth = focusedMonitor.width / focusedMonitor.scale;
+    const topReservedInset = this.getTopReservedInset(focusedMonitor);
 
     // Clamp to screen bounds (left and right)
-    const centered = cursorPos.x - this.popupWidth / 2;
+    const centered = cursorPos.x + cursorOffsetX - this.popupWidth / 2;
     const maxLeft = monitorWidth - this.popupWidth;
     const leftMargin = Math.max(0, Math.min(centered, maxLeft));
-    const topMargin = PopupWindow.TOP_MARGIN;
+    const topMargin = Math.max(0, cursorPos.y - topReservedInset + cursorOffsetY);
 
     GtkLayerShell.set_margin(this, GtkLayerShell.Edge.TOP, topMargin);
     GtkLayerShell.set_margin(this, GtkLayerShell.Edge.LEFT, leftMargin);
   }
 
-  private getCursorPosition(): { x: number } {
-    try {
-      const [ok, stdout] = GLib.spawn_command_line_sync('hyprctl cursorpos');
-      if (ok && stdout) {
-        const output = new TextDecoder().decode(stdout).trim();
-        const match = output.match(/(\d+),\s*(\d+)/);
-        if (match) {
-          return { x: parseInt(match[1], 10) };
-        }
-      }
-    } catch (e) {
-      console.log('Failed to get cursor position:', e);
+  private runCommand(commandLine: string): string | null {
+    const [program] = commandLine.split(' ');
+    if (!program || !GLib.find_program_in_path(program)) {
+      return null;
     }
-    // Fallback: get monitor width from hyprctl and center
-    return { x: this.getMonitorWidth() / 2 };
+
+    try {
+      const [ok, stdout] = GLib.spawn_command_line_sync(commandLine);
+      if (!ok || !stdout) {
+        return null;
+      }
+
+      return new TextDecoder().decode(stdout).trim();
+    } catch (error) {
+      console.warn(`Failed to run command: ${commandLine}`, error);
+      return null;
+    }
   }
 
-  private getMonitorWidth(): number {
-    try {
-      const [ok, stdout] = GLib.spawn_command_line_sync('hyprctl monitors -j');
-      if (ok && stdout) {
-        const output = new TextDecoder().decode(stdout);
-        const monitors = JSON.parse(output);
-        for (const monitor of monitors) {
-          if (monitor.focused) {
-            return monitor.width / monitor.scale;
-          }
-        }
-        if (monitors.length > 0) {
-          return monitors[0].width / monitors[0].scale;
-        }
+  private getCursorPosition(): { x: number; y: number } | null {
+    const output = this.runCommand('hyprctl cursorpos');
+    if (output) {
+      const match = output.match(/(-?\d+),\s*(-?\d+)/);
+      if (match) {
+        return {
+          x: parseInt(match[1], 10),
+          y: parseInt(match[2], 10),
+        };
       }
-    } catch (e) {
-      console.log('Failed to get monitor width:', e);
     }
-    return 1920; // Last resort fallback
+
+    return null;
+  }
+
+  private getFocusedMonitor(): HyprMonitor | null {
+    const output = this.runCommand('hyprctl monitors -j');
+    if (!output) return null;
+
+    try {
+      const monitors = JSON.parse(output) as HyprMonitor[];
+      return monitors.find((m) => m.focused) ?? monitors[0] ?? null;
+    } catch (error) {
+      console.warn('Failed to parse monitor info from hyprctl:', error);
+      return null;
+    }
+  }
+
+  private getTopReservedInset(monitor: HyprMonitor | null): number {
+    const reserved = monitor?.reserved;
+    if (Array.isArray(reserved) && reserved.length >= 2) {
+      const topInset = Number(reserved[1]);
+      if (Number.isFinite(topInset) && topInset >= 0) {
+        return topInset;
+      }
+    }
+    return 0;
   }
 
   private setupKeyController(): void {
@@ -137,23 +181,23 @@ export class PopupWindow extends Adw.ApplicationWindow {
   }
 
   private loadCSS(): void {
-    const colors = this.themeService.colors;
-    const borderRadius = this.themeService.borderRadius;
-    const fontFamily = this.themeService.fontFamily;
-    const albumArtSize = this.configService.albumArtSize;
-    const progressBarHeight = this.configService.progressBarHeight;
-    const playPauseButtonSize = this.configService.playPauseButtonSize;
-    const controlButtonSize = this.configService.controlButtonSize;
-    const paddingTop = this.configService.paddingTop;
-    const paddingBottom = this.configService.paddingBottom;
-    const paddingLeft = this.configService.paddingLeft;
-    const paddingRight = this.configService.paddingRight;
-    const baseFontSize = this.configService.baseFontSize;
-    const titleFontSize = this.configService.titleFontSize;
-    const artistFontSize = this.configService.artistFontSize;
-    const albumFontSize = this.configService.albumFontSize;
-    const timeFontSize = this.configService.timeFontSize;
-    const albumArtBorderRadius = this.configService.albumArtBorderRadius;
+    const { colors, borderRadius, fontFamily } = this.themeService;
+    const {
+      albumArtSize,
+      progressBarHeight,
+      playPauseButtonSize,
+      controlButtonSize,
+      paddingTop,
+      paddingBottom,
+      paddingLeft,
+      paddingRight,
+      baseFontSize,
+      titleFontSize,
+      artistFontSize,
+      albumFontSize,
+      timeFontSize,
+      albumArtBorderRadius,
+    } = this.configService.config;
 
     const css = `
       window {
@@ -208,42 +252,31 @@ export class PopupWindow extends Adw.ApplicationWindow {
         font-size: ${albumFontSize}em;
       }
 
-      .controls {
+      .play-pause-button,
+      .control-button {
+        border-radius: 9999px;
+        padding: 0;
+        color: ${colors.button.normal};
+      }
+
+      .play-pause-button:hover,
+      .control-button:hover {
+        color: ${colors.button.hover};
+      }
+
+      .play-pause-button:disabled,
+      .control-button:disabled {
+        color: ${colors.button.disabled};
       }
 
       .play-pause-button {
         min-width: ${playPauseButtonSize}px;
         min-height: ${playPauseButtonSize}px;
-        border-radius: 9999px;
-        padding: 0;
-        color: ${colors.button.normal};
-      }
-
-      .play-pause-button:hover {
-        color: ${colors.button.hover};
-      }
-
-      .play-pause-button:disabled {
-        color: ${colors.button.disabled};
       }
 
       .control-button {
         min-width: ${controlButtonSize}px;
         min-height: ${controlButtonSize}px;
-        border-radius: 9999px;
-        padding: 0;
-        color: ${colors.button.normal};
-      }
-
-      .control-button:hover {
-        color: ${colors.button.hover};
-      }
-
-      .control-button:disabled {
-        color: ${colors.button.disabled};
-      }
-
-      .progress-container {
       }
 
       .progress-scale trough {
@@ -296,10 +329,14 @@ export class PopupWindow extends Adw.ApplicationWindow {
   }
 
   private buildUI(): void {
-    const albumArtSize = this.configService.albumArtSize;
-    const sectionSpacing = this.configService.sectionSpacing;
-    const albumArtSpacing = this.configService.albumArtSpacing;
-    const controlButtonSpacing = this.configService.controlButtonSpacing;
+    const {
+      albumArtSize,
+      sectionSpacing,
+      albumArtSpacing,
+      controlButtonSpacing,
+      playPauseButtonSize,
+      controlButtonSize,
+    } = this.configService.config;
 
     const mainBox = new Gtk.Box({
       orientation: Gtk.Orientation.VERTICAL,
@@ -311,8 +348,8 @@ export class PopupWindow extends Adw.ApplicationWindow {
     this.albumArt = new AlbumArt(albumArtSize);
     this.trackInfo = new TrackInfo();
     this.controls = new Controls({
-      playPause: this.configService.playPauseButtonSize,
-      control: this.configService.controlButtonSize,
+      playPause: playPauseButtonSize,
+      control: controlButtonSize,
       spacing: controlButtonSpacing,
     });
     this.progress = new Progress();
@@ -376,6 +413,7 @@ export class PopupWindow extends Adw.ApplicationWindow {
   private connectPlayerService(): void {
     this.playerService.connect('metadata-changed', () => {
       this.updateMetadata();
+      this.updateProgress();
     });
 
     this.playerService.connect('state-changed', () => {
