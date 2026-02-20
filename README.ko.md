@@ -83,11 +83,35 @@ yay -S garak
   "albumFontSize": 0.9,
   "timeFontSize": 0.85,
   "cursorOffsetX": 0,
-  "cursorOffsetY": -4
+  "cursorOffsetY": -4,
+  "centerOnCursor": false,
+  "preferredPlayers": ["spotify"]
 }
 ```
 
 전체 옵션 목록은 `config.example.json`을 참고하세요.
+
+#### 팝업 위치
+
+기본적으로 팝업은 커서 아래에 나타납니다. `centerOnCursor`를 `true`로 설정하면 팝업이 커서를 기준으로 수직 중앙에 위치합니다. `cursorOffsetX` / `cursorOffsetY`로 미세 조정할 수 있습니다.
+
+```json
+{
+  "centerOnCursor": true,
+  "cursorOffsetX": 0,
+  "cursorOffsetY": -4
+}
+```
+
+#### 플레이어 우선순위
+
+MPRIS 플레이어가 여러 개 실행 중일 때(예: Spotify와 브라우저), Garak은 재생 상태(재생 중 > 일시정지 > 정지)를 기준으로 최적의 플레이어를 선택합니다. 같은 상태인 플레이어가 여러 개 있으면 `preferredPlayers`에 먼저 나열된 플레이어가 우선 선택됩니다. 목록에 없는 플레이어도 폴백으로 정상 작동합니다.
+
+```json
+{
+  "preferredPlayers": ["spotify", "vlc"]
+}
+```
 
 ### 테마
 

@@ -19,5 +19,7 @@
   "albumFontSize": 0.9,
   "timeFontSize": 0.85,
   "cursorOffsetX": 0,
-  "cursorOffsetY": -4
+  "cursorOffsetY": -4,
+  "centerOnCursor": false,
+  "preferredPlayers": ["spotify"]
 }
