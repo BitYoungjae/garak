@@ -143,6 +143,27 @@ npm run build        # 빌드
 npm run start:debug  # 디버그 모드로 실행
 ```
 
+### 디버그 로그
+
+`GARAK_DEBUG` 환경 변수를 설정하면 디버그 로그가 활성화됩니다. 플레이어 감지, 메타데이터 갱신, 재생 상태 변경 등 내부 이벤트가 `[DBG]` 접두사와 함께 콘솔에 출력됩니다.
+
+```bash
+# npm 스크립트 사용 (권장)
+npm run start:debug
+
+# 또는 직접 실행
+GARAK_DEBUG=1 ./bin/garak
+```
+
+코드에서 디버그 로그를 추가하려면 `debug()` 함수를 임포트해서 사용하면 됩니다:
+
+```ts
+import { debug } from '../debug.js';
+
+debug('my message', someValue);
+// → [DBG] my message <someValue>
+```
+
 ## 프로젝트 구조
 
 ```

@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node esbuild.config.js",
     "start": "npm run build && ./bin/garak",
-    "start:debug": "npm run build && GJS_DEBUG_OUTPUT=stderr GJS_DEBUG_TOPICS='JS ERROR;JS LOG' ./bin/garak",
+    "start:debug": "npm run build && GARAK_DEBUG=1 ./bin/garak",
     "check": "tsc --noEmit",
     "knip": "knip",
     "lint": "eslint .",

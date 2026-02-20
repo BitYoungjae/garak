@@ -153,6 +153,27 @@ npm run build
 npm run start:debug
 ```
 
+### Debug Logging
+
+Set the `GARAK_DEBUG` environment variable to enable debug output. When enabled, internal events like player detection, metadata updates, and playback status changes are logged to the console with a `[DBG]` prefix.
+
+```bash
+# Using npm script (recommended)
+npm run start:debug
+
+# Or manually
+GARAK_DEBUG=1 ./bin/garak
+```
+
+To add debug logging in your code, import and use the `debug()` function:
+
+```ts
+import { debug } from '../debug.js';
+
+debug('my message', someValue);
+// → [DBG] my message <someValue>
+```
+
 ## Project Structure
 
 ```
