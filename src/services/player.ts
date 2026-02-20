@@ -55,6 +55,7 @@ export class PlayerService extends GObject.Object {
 
   private _metadata: PlayerMetadata = createDefaultMetadata();
   private _state: PlayerState = createDefaultState();
+  private seekSuppressUntil: number = 0;
 
   get metadata(): PlayerMetadata {
     return this._metadata;
@@ -382,6 +383,7 @@ export class PlayerService extends GObject.Object {
 
   private updatePosition(): void {
     if (!this.player) return;
+    if (GLib.get_monotonic_time() < this.seekSuppressUntil) return;
     this._state.position = this.getPosition();
   }
 
@@ -434,6 +436,8 @@ export class PlayerService extends GObject.Object {
         const maxPosition =
           this._metadata.length > 0 ? this._metadata.length : Number.MAX_SAFE_INTEGER;
         const boundedPosition = Math.max(0, Math.min(positionUs, maxPosition));
+        this._state.position = boundedPosition;
+        this.seekSuppressUntil = GLib.get_monotonic_time() + 500000;
         this.player.set_position(boundedPosition);
       } catch (error) {
         console.error('Failed to seek:', error);
