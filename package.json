@@ -24,16 +24,16 @@
   ],
   "license": "MIT",
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
-    "esbuild": "^0.27.2",
-    "eslint": "^9.39.2",
-    "eslint-config-prettier": "^9.1.2",
+    "@eslint/js": "^10.0.1",
+    "esbuild": "^0.27.3",
+    "eslint": "^10.0.0",
+    "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "knip": "^5.84.1",
-    "lint-staged": "^15.5.2",
+    "lint-staged": "^16.2.7",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.54.0"
+    "typescript-eslint": "^8.56.0"
   },
   "dependencies": {
     "@girs/adw-1": "^1.9.0-4.0.0-beta.38",
