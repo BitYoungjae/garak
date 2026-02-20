@@ -16,8 +16,19 @@ export interface PlayerState {
   position: number; // microseconds
   canGoNext: boolean;
   canGoPrevious: boolean;
-  canPlay: boolean;
-  canPause: boolean;
+}
+
+function createDefaultMetadata(): PlayerMetadata {
+  return { title: '', artist: '', album: '', artUrl: null, length: 0 };
+}
+
+function createDefaultState(): PlayerState {
+  return {
+    status: 'stopped',
+    position: 0,
+    canGoNext: false,
+    canGoPrevious: false,
+  };
 }
 
 export class PlayerService extends GObject.Object {
@@ -38,25 +49,12 @@ export class PlayerService extends GObject.Object {
   private manager: Playerctl.PlayerManager;
   private player: Playerctl.Player | null = null;
   private positionPollId: number | null = null;
+  private managerSignalIds: number[] = [];
   private playerSignalIds: Map<Playerctl.Player, number[]> = new Map();
   private managedPlayers: Playerctl.Player[] = [];
 
-  private _metadata: PlayerMetadata = {
-    title: '',
-    artist: '',
-    album: '',
-    artUrl: null,
-    length: 0,
-  };
-
-  private _state: PlayerState = {
-    status: 'stopped',
-    position: 0,
-    canGoNext: false,
-    canGoPrevious: false,
-    canPlay: false,
-    canPause: false,
-  };
+  private _metadata: PlayerMetadata = createDefaultMetadata();
+  private _state: PlayerState = createDefaultState();
 
   get metadata(): PlayerMetadata {
     return this._metadata;
@@ -79,25 +77,37 @@ export class PlayerService extends GObject.Object {
   }
 
   private setupManager(): void {
-    this.manager.connect(
+    this.connectManagerSignal(
       'name-appeared',
       (_mgr: Playerctl.PlayerManager, name: Playerctl.PlayerName) => {
-        const player = Playerctl.Player.new_from_name(name);
-        this.manager.manage_player(player);
+        try {
+          const player = Playerctl.Player.new_from_name(name);
+          const playerName = this.getPlayerName(player);
+          if (this.isProxyPlayer(playerName) || this.isManagedPlayerName(playerName)) {
+            return;
+          }
+          this.manager.manage_player(player);
+        } catch {
+          // Player may have disappeared before it can be managed
+        }
       }
     );
 
-    this.manager.connect(
+    this.connectManagerSignal(
       'player-appeared',
       (_mgr: Playerctl.PlayerManager, player: Playerctl.Player) => {
-        if (this.isProxyPlayer(this.getPlayerName(player))) return;
+        const playerName = this.getPlayerName(player);
+        if (this.isProxyPlayer(playerName) || this.isManagedPlayerName(playerName)) {
+          return;
+        }
+
         this.managedPlayers.push(player);
         this.connectPlayerSignals(player);
         this.selectBestPlayer();
       }
     );
 
-    this.manager.connect(
+    this.connectManagerSignal(
       'player-vanished',
       (_mgr: Playerctl.PlayerManager, player: Playerctl.Player) => {
         this.managedPlayers = this.managedPlayers.filter((p) => p !== player);
@@ -115,8 +125,22 @@ export class PlayerService extends GObject.Object {
     );
   }
 
+  private connectManagerSignal<T extends keyof Playerctl.PlayerManager.SignalSignatures>(
+    signal: T,
+    callback: GObject.SignalCallback<
+      Playerctl.PlayerManager,
+      Playerctl.PlayerManager.SignalSignatures[T]
+    >
+  ): void {
+    this.managerSignalIds.push(this.manager.connect(signal, callback));
+  }
+
   private isProxyPlayer(name: string): boolean {
     return name === 'playerctld' || name.startsWith('playerctld.');
+  }
+
+  private isManagedPlayerName(name: string): boolean {
+    return this.managedPlayers.some((managedPlayer) => this.getPlayerName(managedPlayer) === name);
   }
 
   private initExistingPlayers(): void {
@@ -139,6 +163,7 @@ export class PlayerService extends GObject.Object {
         if (name.startsWith(MPRIS_PREFIX)) {
           const playerName = name.substring(MPRIS_PREFIX.length);
           if (this.isProxyPlayer(playerName)) continue;
+          if (this.isManagedPlayerName(playerName)) continue;
           try {
             const player = new Playerctl.Player({ player_name: playerName });
             this.manager.manage_player(player);
@@ -147,8 +172,8 @@ export class PlayerService extends GObject.Object {
           }
         }
       }
-    } catch (e) {
-      console.log('Failed to init existing players:', e);
+    } catch (error) {
+      console.warn('Failed to initialize existing players:', error);
     }
   }
 
@@ -246,24 +271,10 @@ export class PlayerService extends GObject.Object {
     }
 
     // Prefer playing, then paused, then first available
-    let best: Playerctl.Player | null = null;
-    for (let i = 0; i < players.length; i++) {
-      if (this.getPlaybackStatus(players[i]) === Playerctl.PlaybackStatus.PLAYING) {
-        best = players[i];
-        break;
-      }
-    }
-    if (!best) {
-      for (let i = 0; i < players.length; i++) {
-        if (this.getPlaybackStatus(players[i]) === Playerctl.PlaybackStatus.PAUSED) {
-          best = players[i];
-          break;
-        }
-      }
-    }
-    if (!best) {
-      best = players[0];
-    }
+    const best =
+      players.find((p) => this.getPlaybackStatus(p) === Playerctl.PlaybackStatus.PLAYING) ??
+      players.find((p) => this.getPlaybackStatus(p) === Playerctl.PlaybackStatus.PAUSED) ??
+      players[0];
 
     if (best !== this.player) {
       this.switchToPlayer(best);
@@ -293,51 +304,37 @@ export class PlayerService extends GObject.Object {
         artUrl: this.getArtUrl(),
         length: this.getLength(),
       };
-    } catch (e) {
-      console.log('Failed to get metadata:', e);
+    } catch (error) {
+      console.warn('Failed to read metadata:', error);
     }
   }
 
-  private getArtUrl(): string | null {
+  private getPlayerMetadataVariant(): GLib.Variant | null {
     if (!this.player) return null;
+    return (this.player as unknown as { metadata: GLib.Variant | null }).metadata ?? null;
+  }
+
+  private getArtUrl(): string | null {
     try {
-      const metadata = (this.player as unknown as { metadata: GLib.Variant | null }).metadata;
-      if (!metadata) return null;
-
-      const value = metadata.lookup_value('mpris:artUrl', null);
-      if (!value) return null;
-
-      const typeStr = value.get_type_string();
-      if (typeStr === 's') {
-        return value.get_string()[0] || null;
-      }
-      return null;
+      const value = this.getPlayerMetadataVariant()?.lookup_value('mpris:artUrl', null);
+      if (!value || value.get_type_string() !== 's') return null;
+      return value.get_string()[0] || null;
     } catch {
       return null;
     }
   }
 
   private getLength(): number {
-    if (!this.player) return 0;
     try {
-      const metadata = (this.player as unknown as { metadata: GLib.Variant | null }).metadata;
-      if (!metadata) return 0;
-
-      const value = metadata.lookup_value('mpris:length', null);
+      const value = this.getPlayerMetadataVariant()?.lookup_value('mpris:length', null);
       if (!value) return 0;
 
       const typeStr = value.get_type_string();
-      if (typeStr === 'x') {
-        return Number(value.get_int64());
-      } else if (typeStr === 't') {
-        return Number(value.get_uint64());
-      } else if (typeStr === 'i') {
-        return value.get_int32();
-      } else if (typeStr === 'u') {
-        return value.get_uint32();
-      } else if (typeStr === 'd') {
-        return Math.floor(value.get_double());
-      }
+      if (typeStr === 'x') return Number(value.get_int64());
+      if (typeStr === 't') return Number(value.get_uint64());
+      if (typeStr === 'i') return value.get_int32();
+      if (typeStr === 'u') return value.get_uint32();
+      if (typeStr === 'd') return Math.floor(value.get_double());
       return 0;
     } catch {
       return 0;
@@ -352,8 +349,6 @@ export class PlayerService extends GObject.Object {
         playback_status: Playerctl.PlaybackStatus;
         can_go_next: boolean;
         can_go_previous: boolean;
-        can_play: boolean;
-        can_pause: boolean;
       };
 
       const status = player.playback_status;
@@ -370,11 +365,9 @@ export class PlayerService extends GObject.Object {
         position: this.getPosition(),
         canGoNext: player.can_go_next || false,
         canGoPrevious: player.can_go_previous || false,
-        canPlay: player.can_play || false,
-        canPause: player.can_pause || false,
       };
-    } catch (e) {
-      console.log('Failed to get state:', e);
+    } catch (error) {
+      console.warn('Failed to read playback state:', error);
     }
   }
 
@@ -410,21 +403,8 @@ export class PlayerService extends GObject.Object {
   }
 
   private resetState(): void {
-    this._metadata = {
-      title: '',
-      artist: '',
-      album: '',
-      artUrl: null,
-      length: 0,
-    };
-    this._state = {
-      status: 'stopped',
-      position: 0,
-      canGoNext: false,
-      canGoPrevious: false,
-      canPlay: false,
-      canPause: false,
-    };
+    this._metadata = createDefaultMetadata();
+    this._state = createDefaultState();
     this.emit('metadata-changed');
     this.emit('state-changed');
   }
@@ -451,26 +431,31 @@ export class PlayerService extends GObject.Object {
   setPosition(positionUs: number): void {
     if (this.player) {
       try {
-        this.player.set_position(positionUs);
-      } catch (e) {
-        console.error('Failed to seek:', e);
+        const maxPosition =
+          this._metadata.length > 0 ? this._metadata.length : Number.MAX_SAFE_INTEGER;
+        const boundedPosition = Math.max(0, Math.min(positionUs, maxPosition));
+        this.player.set_position(boundedPosition);
+      } catch (error) {
+        console.error('Failed to seek:', error);
       }
     }
   }
 
   destroy(): void {
     this.stopPositionPolling();
-    // Disconnect all player signals
-    for (const [player, ids] of this.playerSignalIds) {
-      for (const id of ids) {
-        try {
-          player.disconnect(id);
-        } catch {
-          // Player may already be disposed
-        }
+    for (const signalId of this.managerSignalIds) {
+      try {
+        this.manager.disconnect(signalId);
+      } catch {
+        // Manager may already be disposed
       }
     }
-    this.playerSignalIds.clear();
+    this.managerSignalIds = [];
+
+    for (const player of this.managedPlayers) {
+      this.disconnectPlayerSignals(player);
+    }
+    this.managedPlayers = [];
     this.player = null;
   }
 }
