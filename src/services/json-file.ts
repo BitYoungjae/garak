@@ -32,3 +32,8 @@ export function readNumber(value: unknown, fallback: number, min: number, max: n
   }
   return Math.min(max, Math.max(min, value));
 }
+
+export function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string');
+}
