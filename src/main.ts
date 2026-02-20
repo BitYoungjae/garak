@@ -45,6 +45,9 @@ class MprisPopupApplication extends Adw.Application {
     }
 
     this.window = new PopupWindow(this, this.configService, this.themeService);
+    this.window.connect('destroy', () => {
+      this.window = null;
+    });
     this.window.present();
   }
 }
